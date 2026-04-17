@@ -1,0 +1,325 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Lato:wght@300;400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── 1. COLOUR PALETTE ──────────────────────────────────────── */
+:root {
+  /* Sky blues */
+  --color-sky-deep:       #2A9ED8;
+  --color-sky-mid:        #4AB8E8;
+  --color-sky-light:      #72CEF0;
+  --color-sky-pale:       #A8E4F8;
+  --color-sky-horizon:    #C8F2FF;
+
+  /* Sea blues */
+  --color-sea-bright:     #28B8E8;
+  --color-sea-top:        #1E9DC8;
+  --color-sea-mid:        #0E85B2;
+  --color-sea-deep:       #0A6A94;
+  --color-sea-gradient-1: #1AABDC;
+  --color-sea-gradient-2: #0E90C0;
+  --color-sea-gradient-3: #0A78A8;
+  --color-sea-gradient-4: #086090;
+  --color-sea-dark:       #055880;
+
+  /* Water surface */
+  --color-water-1:        #1AA8DC;
+  --color-water-2:        #0E98CC;
+  --color-water-3:        #0A88B8;
+  --color-water-4:        #0878A8;
+  --color-water-5:        #066894;
+
+  /* Sun & light */
+  --color-sun-core:       #FFF5A0;
+  --color-sun-mid:        #FFE040;
+  --color-sun-outer:      #FFD020;
+  --color-sun-glow-1:     rgba(255, 220, 40, 0.12);
+  --color-sun-glow-2:     rgba(255, 220, 40, 0.07);
+  --color-sun-glow-3:     rgba(255, 220, 40, 0.04);
+  --color-sun-glow-4:     rgba(255, 220, 40, 0.25);
+  --color-shimmer:        rgba(255, 240, 100, 0.35);
+  --color-shimmer-fade:   rgba(255, 240, 100, 0.10);
+
+  /* Sand / beach */
+  --color-sand-light:     #F4E8B8;
+  --color-sand-mid:       #F0E0A8;
+  --color-sand-dark:      #E8D898;
+
+  /* Foam / white */
+  --color-foam:           rgba(255, 255, 255, 0.82);
+  --color-foam-line:      rgba(255, 255, 255, 0.50);
+  --color-sparkle:        #ffffff;
+  --color-horizon-shimmer:rgba(255, 255, 255, 0.90);
+
+  /* Brand overlay / brand text */
+  --color-overlay-start:  rgba(6, 62, 90, 0.85);
+  --color-overlay-end:    rgba(6, 62, 90, 0.20);
+  --color-brand-title:    #ffffff;
+  --color-brand-sub:      rgba(200, 242, 255, 0.85);
+  --color-brand-place:    rgba(200, 242, 255, 0.75);
+  --color-brand-caption:  rgba(200, 242, 255, 0.60);
+  --color-brand-divider:  rgba(255, 255, 255, 0.15);
+  --color-brand-dash:     rgba(255, 255, 255, 0.40);
+
+  /* Form panel background */
+  --color-form-bg-1:      #EBF8FF;
+  --color-form-bg-2:      #D6F0FA;
+  --color-form-bg-3:      #C8EAFA;
+  --color-form-bubble-1:  rgba(78, 184, 232, 0.08);
+  --color-form-bubble-2:  rgba(14, 133, 178, 0.06);
+
+  /* Text */
+  --color-text-primary:   #0A3D52;
+  --color-text-secondary: #1A6A8A;
+  --color-text-tertiary:  rgba(10, 61, 82, 0.45);
+  --color-text-hint:      rgba(10, 61, 82, 0.28);
+  --color-text-disabled:  rgba(10, 61, 82, 0.35);
+
+  /* Borders */
+  --color-border:         rgba(14, 133, 178, 0.20);
+  --color-border-hover:   rgba(14, 133, 178, 0.55);
+  --color-border-focus:   #1E9DC8;
+  --color-border-subtle:  rgba(14, 133, 178, 0.15);
+  --color-border-input:   rgba(14, 133, 178, 0.18);
+
+  /* Input */
+  --color-input-bg:       rgba(255, 255, 255, 0.75);
+  --color-input-bg-focus: rgba(255, 255, 255, 0.95);
+  --color-input-text:     #0A3D52;
+
+  /* Button */
+  --color-btn-from:       #28B8E8;
+  --color-btn-mid:        #0E85B2;
+  --color-btn-to:         #0A6A94;
+  --color-btn-text:       #ffffff;
+
+  /* Tab pill */
+  --color-pill-bg:        rgba(255, 255, 255, 0.60);
+  --color-pill-text:      rgba(10, 61, 82, 0.35);
+  --color-pill-active-from: #1E9DC8;
+  --color-pill-active-to:   #0E85B2;
+  --color-pill-active-text: #ffffff;
+
+  /* Google button */
+  --color-google-bg:      rgba(255, 255, 255, 0.85);
+  --color-google-bg-hover:rgba(255, 255, 255, 0.95);
+  --color-google-text:    #0A3D52;
+
+  /* Error / info states */
+  --color-error-bg:       rgba(200, 240, 255, 0.50);
+  --color-error-border:   rgba(14, 133, 178, 0.25);
+  --color-error-text:     #0A3D52;
+  --color-error-icon:     #1A6A8A;
+
+  /* Divider */
+  --color-divider:        rgba(14, 133, 178, 0.15);
+  --color-divider-text:   rgba(10, 61, 82, 0.38);
+  --color-divider-wave:   rgba(14, 133, 178, 0.35);
+
+  /* Checkbox */
+  --color-checkbox-border:  rgba(14, 133, 178, 0.28);
+  --color-checkbox-bg:      rgba(255, 255, 255, 0.70);
+  --color-checkbox-active:  #1E9DC8;
+  --color-checkbox-check:   #ffffff;
+
+  /* Strength meter bars */
+  --color-strength-weak:    #E07A5F;
+  --color-strength-fair:    #F2CC60;
+  --color-strength-good:    #3DA88A;
+  --color-strength-strong:  #1A9DC8;
+  --color-strength-track:   rgba(14, 133, 178, 0.12);
+
+  /* Clouds */
+  --color-cloud:          rgba(255, 255, 255, 0.82);
+
+  /* Footer / link */
+  --color-link:           #1E9DC8;
+  --color-link-hover:     #0E85B2;
+  --color-footer-text:    rgba(10, 61, 82, 0.45);
+}
+
+/* ── 2. TYPOGRAPHY ──────────────────────────────────────────── */
+:root {
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body:    'Lato', system-ui, sans-serif;
+
+  /* Scale */
+  --text-xs:   0.68rem;
+  --text-sm:   0.71rem;
+  --text-base: 0.82rem;
+  --text-md:   0.87rem;
+  --text-lg:   0.95rem;
+  --text-xl:   1.95rem;
+  --text-2xl:  2.8rem;
+
+  /* Weight */
+  --weight-light:  300;
+  --weight-normal: 400;
+  --weight-bold:   700;
+
+  /* Letter spacing */
+  --tracking-tight:  -0.01em;
+  --tracking-normal:  0.01em;
+  --tracking-wide:    0.03em;
+  --tracking-wider:   0.05em;
+  --tracking-widest:  0.22em;
+}
+
+/* ── 3. SPACING ─────────────────────────────────────────────── */
+:root {
+  --space-1:  0.25rem;
+  --space-2:  0.38rem;
+  --space-3:  0.5rem;
+  --space-4:  0.6rem;
+  --space-5:  0.7rem;
+  --space-6:  0.85rem;
+  --space-7:  1rem;
+  --space-8:  1.15rem;
+  --space-9:  1.2rem;
+  --space-10: 1.4rem;
+  --space-12: 1.5rem;
+  --space-16: 2rem;
+  --space-20: 2.2rem;
+  --space-24: 2.8rem;
+  --space-32: 3.5rem;   /* panel padding */
+}
+
+/* ── 4. SIZING ──────────────────────────────────────────────── */
+:root {
+  --panel-width:       48%;
+  --form-max-width:    400px;
+  --sun-size:          72px;
+  --shimmer-width:     160px;
+  --tab-height:        46px;
+  --input-height:      44px;
+  --checkbox-size:     18px;
+  --field-icon-size:   15px;
+  --spinner-size:      16px;
+  --sparkle-size:      3px;
+}
+
+/* ── 5. BORDER RADIUS ───────────────────────────────────────── */
+:root {
+  --radius-pill:   40px;
+  --radius-tab:    30px;
+  --radius-card:   12px;
+  --radius-input:  11px;
+  --radius-btn:    12px;
+  --radius-check:  6px;
+  --radius-cloud:  50px;
+  --radius-foam:   4px;
+}
+
+/* ── 6. SHADOWS ─────────────────────────────────────────────── */
+:root {
+  --shadow-pill:      0 2px 12px rgba(14, 133, 178, 0.08);
+  --shadow-tab-active:0 3px 10px rgba(14, 133, 178, 0.35);
+  --shadow-google:    0 2px 8px  rgba(14, 133, 178, 0.08);
+  --shadow-google-h:  0 4px 14px rgba(14, 133, 178, 0.14);
+  --shadow-input:     0 1px 4px  rgba(14, 133, 178, 0.06);
+  --shadow-input-focus: 0 0 0 3px rgba(30, 157, 200, 0.12),
+                        0 2px 8px rgba(14, 133, 178, 0.10);
+  --shadow-btn:       0 4px 20px rgba(14, 133, 178, 0.40);
+  --shadow-btn-hover: 0 8px 28px rgba(14, 133, 178, 0.45);
+  --shadow-sun-idle:
+    0 0 0 16px rgba(255, 220, 40, 0.12),
+    0 0 0 36px rgba(255, 220, 40, 0.07),
+    0 0 0 64px rgba(255, 220, 40, 0.04),
+    0 0 80px 20px rgba(255, 220, 40, 0.25);
+  --shadow-sun-pulse:
+    0 0 0 22px rgba(255, 220, 40, 0.15),
+    0 0 0 48px rgba(255, 220, 40, 0.09),
+    0 0 0 80px rgba(255, 220, 40, 0.05),
+    0 0 100px 28px rgba(255, 220, 40, 0.30);
+}
+
+/* ── 7. TRANSITIONS ─────────────────────────────────────────── */
+:root {
+  --transition-fast:   0.15s ease;
+  --transition-base:   0.20s ease;
+  --transition-enter:  0.25s ease;
+  --transition-spring: 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── 8. Z-INDEX SCALE ───────────────────────────────────────── */
+:root {
+  --z-sea:    1;
+  --z-foam:   2;
+  --z-beach:  5;
+  --z-brand: 10;
+  --z-form:  20;
+}
+
+/* ── 9. ANIMATION DURATIONS ─────────────────────────────────── */
+:root {
+  --anim-sun:        5s;
+  --anim-cloud-1:   55s;
+  --anim-cloud-2:   70s;
+  --anim-cloud-3:   90s;
+  --anim-shimmer:    4s;
+  --anim-wave-svg-1: 6s;
+  --anim-wave-svg-2: 9s;
+  --anim-foam-base:  6s;
+  --anim-sparkle:    2s;
+  --anim-rise:       0.5s;
+  --anim-card:       0.45s;
+  --anim-spin:       0.7s;
+}
+
+/* ── 10. KEYFRAMES ──────────────────────────────────────────── */
+
+@keyframes tz-sun-pulse {
+  0%, 100% { box-shadow: var(--shadow-sun-idle); }
+  50%      { box-shadow: var(--shadow-sun-pulse); }
+}
+
+@keyframes tz-cloud-float {
+  from { transform: translateX(0); }
+  to   { transform: translateX(700px); }
+}
+
+@keyframes tz-shimmer-sway {
+  0%, 100% { transform: scaleX(1);   opacity: 0.8; }
+  50%      { transform: scaleX(1.3); opacity: 1;   }
+}
+
+@keyframes tz-foam-drift {
+  0%, 100% { transform: translateX(0)   scaleX(1);    opacity: 0.5; }
+  50%      { transform: translateX(3%)  scaleX(1.06); opacity: 0.9; }
+}
+
+@keyframes tz-sparkle {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  40%, 60% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes tz-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes tz-card-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes tz-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── 11. BASE RESET & BODY ──────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font-body);
+  background: var(--color-form-bg-1);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
