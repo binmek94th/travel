@@ -62,7 +62,7 @@ export default function LoginPage() {
           <div className="fg">
             <div className="flabel-row">
               <label className="flabel" htmlFor="login-password">Password</label>
-              <Link href="/forgot-password" className="flink">Forgot password?</Link>
+              <Link href="/auth/forgot-password" className="flink">Forgot password?</Link>
             </div>
             <div className="fw fw--icon">
               <input
