@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -12,31 +12,53 @@ import {
 } from "@/src/components/admin/ui";
 import Dropdown, { DropdownOption } from "@/src/components/ui/Dropdown";
 import DeleteDialog from "@/src/components/admin/DeleteDialog";
+import ImageUploader from "@/src/components/ui/ImageUploader";
+import ItineraryDayCard from "@/src/app/admin/tours/ItineraryDayCard";
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 const schema = z.object({
   title:        z.string().min(3, "Title must be at least 3 characters"),
   operatorId:   z.string().min(1, "Please select an operator"),
-  priceUSD:     z.coerce.number().min(0, "Required").nonnegative("Must be positive"),
-  priceETB:     z.coerce.number().min(0, "Required").nonnegative("Must be positive"),
+  description:  z.string().min(10, "Description must be at least 10 characters"),
+  priceUSD:     z.coerce.number().min(0).nonnegative(),
+  priceETB:     z.coerce.number().min(0).nonnegative(),
   durationDays: z.coerce.number().min(1, "At least 1 day"),
+  groupSizeMin: z.coerce.number().min(1),
+  groupSizeMax: z.coerce.number().min(1),
   status:       z.enum(["active", "draft", "archived"]),
   isFeatured:   z.boolean(),
+  images:       z.array(z.string()).optional(),
+  includes:     z.array(z.object({ item: z.string().min(1, "Required") })).optional(),
+  excludes: z.array(z.object({ item: z.string().min(1, "Required") })).optional(), // ← add
+  itinerary: z.array(z.object({
+    day:         z.coerce.number().min(1),
+    title:       z.string().min(1, "Title required"),
+    description: z.string().min(1, "Description required"),
+    latitude:    z.coerce.number().optional().or(z.literal("")),
+    longitude:   z.coerce.number().optional().or(z.literal("")),
+    transportMode: z.enum(["driving", "walking", "flying", "boat"]).optional(),
+  })).optional(),
+}).refine(d => d.groupSizeMax >= d.groupSizeMin, {
+  message: "Max group size must be ≥ min",
+  path: ["groupSizeMax"],
 });
 
 type FormValues = z.infer<typeof schema>;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Tour = {
-  id: string; title: string; operatorId: string;
+  id: string; title: string; slug: string; operatorId: string;
   priceUSD: number; priceETB: number; durationDays: number;
   status: string; bookingCount: number; avgRating: number;
   isFeatured: boolean; destinationIds: string[]; categories: string[];
+  description: string; images: string[];
+  itinerary: { day: number; title: string; description: string; latitude?: number; longitude?: number; transportMode?: "driving" | "walking" | "flying" | "boat"; }[];
+  includes: string[]; groupSizeMin: number; groupSizeMax: number; excludes: string[]
 };
 
 type Operator = { uid: string; name: string };
 
-// ── Dropdown options ──────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 const STATUS_TABS = [
   { value: "all",      label: "All"      },
   { value: "active",   label: "Active"   },
@@ -64,8 +86,8 @@ function FieldError({ msg }: { msg?: string }) {
   return <p className="text-xs text-red-500 mt-1">{msg}</p>;
 }
 
-function errorBorder(hasError: boolean) {
-  return hasError ? "border-red-400 focus:border-red-400" : "";
+function errorBorder(has: boolean) {
+  return has ? "border-red-400 focus:border-red-400" : "";
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -82,11 +104,12 @@ export default function ToursClient({
   const [search,         setSearch]   = useState("");
   const [page,           setPage]     = useState(1);
 
-  // modal + delete state
+  // modal state
   const [modal,        setModal]        = useState(false);
   const [editing,      setEditing]      = useState<Tour | null>(null);
   const [saving,       setSaving]       = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Tour | null>(null);
+  const [activeTab, setActiveTab] = useState<"basic" | "itinerary" | "includes" | "excludes" | "media">("basic");
 
   const operatorOptions: DropdownOption[] = useMemo(
       () => operators.map(o => ({ label: o.name, value: o.uid })),
@@ -119,31 +142,70 @@ export default function ToursClient({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      title: "", operatorId: "", priceUSD: 0, priceETB: 0,
-      durationDays: 1, status: "draft", isFeatured: false,
+      title: "", operatorId: "", description: "",
+      priceUSD: 0, priceETB: 0, durationDays: 1,
+      groupSizeMin: 1, groupSizeMax: 12,
+      status: "draft", isFeatured: false,
+      images: [], includes: [], itinerary: [],
     },
   });
+
+  const {
+    fields: itineraryFields,
+    append: appendDay,
+    remove: removeDay,
+    move:   moveDay,
+  } = useFieldArray({ control, name: "itinerary" });
+
+  const {
+    fields: includesFields,
+    append: appendInclude,
+    remove: removeInclude,
+  } = useFieldArray({ control, name: "includes" });
+
+  const {
+    fields: excludesFields,
+    append: appendExclude,
+    remove: removeExclude,
+  } = useFieldArray({ control, name: "excludes" });
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
   function openNew() {
     setEditing(null);
+    setActiveTab("basic");
     reset({
-      title: "", operatorId: "", priceUSD: 0, priceETB: 0,
-      durationDays: 1, status: "draft", isFeatured: false,
+      title: "", operatorId: "", description: "",
+      priceUSD: 0, priceETB: 0, durationDays: 1,
+      groupSizeMin: 1, groupSizeMax: 12,
+      status: "draft", isFeatured: false,
+      images: [], includes: [], itinerary: [], excludes: []
     });
     setModal(true);
   }
 
   function openEdit(t: Tour) {
     setEditing(t);
+    setActiveTab("basic");
     reset({
       title:        t.title,
       operatorId:   t.operatorId,
+      description:  t.description,
       priceUSD:     t.priceUSD,
       priceETB:     t.priceETB,
       durationDays: t.durationDays,
+      groupSizeMin: t.groupSizeMin,
+      groupSizeMax: t.groupSizeMax,
       status:       t.status as "active" | "draft" | "archived",
       isFeatured:   t.isFeatured,
+      images:       t.images   ?? [],
+      includes:     (t.includes ?? []).map(item => ({ item })),
+      excludes: (t.excludes ?? []).map(item => ({ item })),
+      itinerary: t.itinerary?.map(d => ({
+        ...d,
+        latitude:  d.latitude  ?? "",
+        longitude: d.longitude ?? "",
+        transportMode: d.transportMode ?? "driving",
+      })) ?? [],
     });
     setModal(true);
   }
@@ -152,15 +214,20 @@ export default function ToursClient({
   async function onSubmit(data: FormValues) {
     setSaving(true);
     try {
+      const payload = {
+        ...data,
+        // flatten includes back to string[]
+        includes: (data.includes ?? []).map(i => i.item).filter(Boolean),
+        excludes: (data.excludes ?? []).map(i => i.item).filter(Boolean),
+      };
+
       const method = editing ? "PATCH" : "POST";
-      const url    = editing
-          ? `/api/admin/tours/${editing.id}`
-          : "/api/admin/tours";
+      const url    = editing ? `/api/admin/tours/${editing.id}` : "/api/admin/tours";
 
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -181,9 +248,8 @@ export default function ToursClient({
   // ── Row actions ────────────────────────────────────────────────────────────
   async function approveTour(id: string) {
     const res = await fetch(`/api/admin/tours/${id}`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ status: "active" }),
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "active" }),
     });
     if (!res.ok) { toast.error("Failed to approve tour"); return; }
     toast.success("Tour approved");
@@ -192,13 +258,19 @@ export default function ToursClient({
 
   async function deleteTour() {
     if (!deleteTarget) return;
-    const res = await fetch(`/api/admin/tours/${deleteTarget.id}`, {
-      method: "DELETE",
-    });
+    const res = await fetch(`/api/admin/tours/${deleteTarget.id}`, { method: "DELETE" });
     if (!res.ok) { toast.error("Failed to delete tour"); return; }
     toast.success("Tour deleted");
     router.refresh();
   }
+
+  const modalTabs = [
+    { key: "basic",     label: "Basic info"                            },
+    { key: "itinerary", label: `Itinerary (${itineraryFields.length})` },
+    { key: "includes",  label: `Includes (${includesFields.length})`   },
+    { key: "excludes",  label: `Excludes (${excludesFields.length})`   },
+    { key: "media",     label: "Images"                                },
+  ] as const;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -207,10 +279,7 @@ export default function ToursClient({
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h2
-                className="text-2xl font-light text-slate-800"
-                style={{ fontFamily: "'Playfair Display',serif" }}
-            >
+            <h2 className="text-2xl font-light text-slate-800" style={{ fontFamily: "'Playfair Display',serif" }}>
               Tours
             </h2>
             <p className="text-sm text-slate-500 mt-1">
@@ -227,7 +296,7 @@ export default function ToursClient({
           <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 w-52">
               <svg className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <circle cx="7" cy="7" r="5" /><path d="M12 12l3 3" />
+                <circle cx="7" cy="7" r="5"/><path d="M12 12l3 3"/>
               </svg>
               <input
                   className="flex-1 bg-transparent outline-none text-sm placeholder:text-slate-400"
@@ -236,12 +305,7 @@ export default function ToursClient({
                   onChange={e => setSearch(e.target.value)}
               />
             </div>
-            <Dropdown
-                options={DURATION_OPTIONS}
-                value={durationFilter}
-                onChange={setDuration}
-                width="w-36"
-            />
+            <Dropdown options={DURATION_OPTIONS} value={durationFilter} onChange={setDuration} width="w-36" />
           </div>
 
           {/* Table */}
@@ -257,7 +321,7 @@ export default function ToursClient({
             {filtered.length === 0 ? (
                 <tr><td colSpan={9}>
                   <EmptyState
-                      icon={<svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="10" cy="10" r="8" /><path d="M13.5 6.5l-2 5-5 2 2-5 5-2z" /></svg>}
+                      icon={<svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="10" cy="10" r="8"/><path d="M13.5 6.5l-2 5-5 2 2-5 5-2z"/></svg>}
                       title="No tours found"
                   />
                 </td></tr>
@@ -267,13 +331,17 @@ export default function ToursClient({
                   <tr key={tour.id} className="hover:bg-slate-50/60 group transition-colors">
                     <Td>
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-md bg-cyan-50 flex items-center justify-center text-cyan-500 flex-shrink-0 text-base">
-                          🧭
+                        <div className="w-8 h-8 rounded-md overflow-hidden bg-cyan-50 flex items-center justify-center text-cyan-500 flex-shrink-0">
+                          {tour.images?.[0]
+                              ? <img src={tour.images[0]} alt={tour.title} className="w-full h-full object-cover" />
+                              : <span className="text-base">🧭</span>
+                          }
                         </div>
                         <div>
                           <div className="font-medium text-slate-800 text-sm leading-tight">{tour.title}</div>
                           <div className="text-xs text-slate-400">
                             {tour.destinationIds.length} destination{tour.destinationIds.length !== 1 ? "s" : ""}
+                            {tour.itinerary?.length > 0 && ` · ${tour.itinerary.length} days`}
                           </div>
                         </div>
                       </div>
@@ -294,14 +362,12 @@ export default function ToursClient({
                     <Td>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         {tour.status === "pending" && (
-                            <Btn variant="primary" size="sm" onClick={() => approveTour(tour.id)}>
-                              Approve
-                            </Btn>
+                            <Btn variant="primary" size="sm" onClick={() => approveTour(tour.id)}>Approve</Btn>
                         )}
                         <Btn variant="ghost" size="sm" onClick={() => openEdit(tour)}>Edit</Btn>
                         <Btn variant="danger" size="sm" onClick={() => setDeleteTarget(tour)}>
                           <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                            <path d="M3 4h10M6 4V3h4v1M5 4v9h6V4" />
+                            <path d="M3 4h10M6 4V3h4v1M5 4v9h6V4"/>
                           </svg>
                         </Btn>
                       </div>
@@ -315,7 +381,7 @@ export default function ToursClient({
           <Pagination total={total} showing={filtered.length} page={page} perPage={20} onPage={setPage} />
         </Card>
 
-        {/* Edit / Add modal */}
+        {/* ── Modal ── */}
         <Modal
             open={modal}
             onClose={() => setModal(false)}
@@ -324,110 +390,286 @@ export default function ToursClient({
             footer={
               <>
                 <Btn variant="ghost" onClick={() => setModal(false)}>Cancel</Btn>
-                <Btn
-                    variant="primary"
-                    disabled={saving}
-                    onClick={handleSubmit(onSubmit)}
-                >
+                <Btn variant="primary" disabled={saving} onClick={handleSubmit(onSubmit)}>
                   {saving ? "Saving…" : "Save tour"}
                 </Btn>
               </>
             }
         >
+          {/* Modal tabs */}
+          <div className="flex border-b border-slate-100 mb-5 -mx-1">
+            {modalTabs.map(tab => (
+                <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`px-4 py-2.5 text-xs font-semibold capitalize transition-colors border-b-2 -mb-px whitespace-nowrap ${
+                        activeTab === tab.key
+                            ? "border-cyan-600 text-cyan-600"
+                            : "border-transparent text-slate-400 hover:text-slate-600"
+                    }`}
+                >
+                  {tab.label}
+                </button>
+            ))}
+          </div>
+
           <form onSubmit={e => e.preventDefault()} className="flex flex-col gap-4">
 
-            <FormField label="Tour title">
-              <input
-                  {...register("title")}
-                  className={`${inputCls} ${errorBorder(!!errors.title)}`}
-                  placeholder="e.g. 7-Day Lalibela Explorer"
-              />
-              <FieldError msg={errors.title?.message} />
-            </FormField>
+            {/* ── Basic info ── */}
+            {activeTab === "basic" && (
+                <>
+                  <FormField label="Tour title">
+                    <input
+                        {...register("title")}
+                        className={`${inputCls} ${errorBorder(!!errors.title)}`}
+                        placeholder="e.g. 7-Day Lalibela Explorer"
+                    />
+                    <FieldError msg={errors.title?.message} />
+                  </FormField>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Operator">
-                <Controller
-                    name="operatorId"
-                    control={control}
-                    render={({ field }) => (
-                        <Dropdown
-                            searchable
-                            options={operatorOptions}
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Select operator"
-                            width="w-full"
-                        />
-                    )}
+                  <FormField label="Description">
+                <textarea
+                    {...register("description")}
+                    className={`${inputCls} min-h-[80px] resize-y ${errorBorder(!!errors.description)}`}
+                    placeholder="Describe the tour experience…"
                 />
-                <FieldError msg={errors.operatorId?.message} />
-              </FormField>
+                    <FieldError msg={errors.description?.message} />
+                  </FormField>
 
-              <FormField label="Status">
-                <Controller
-                    name="status"
-                    control={control}
-                    render={({ field }) => (
-                        <Dropdown
-                            options={FORM_STATUS_OPTIONS}
-                            value={field.value}
-                            onChange={v => field.onChange(v as "active" | "draft" | "archived")}
-                            width="w-full"
-                        />
-                    )}
-                />
-                <FieldError msg={errors.status?.message} />
-              </FormField>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <FormField label="Price (USD)">
-                <input
-                    {...register("priceUSD")}
-                    type="number" min="0"
-                    className={`${inputCls} ${errorBorder(!!errors.priceUSD)}`}
-                />
-                <FieldError msg={errors.priceUSD?.message} />
-              </FormField>
-              <FormField label="Price (ETB)">
-                <input
-                    {...register("priceETB")}
-                    type="number" min="0"
-                    className={`${inputCls} ${errorBorder(!!errors.priceETB)}`}
-                />
-                <FieldError msg={errors.priceETB?.message} />
-              </FormField>
-              <FormField label="Duration (days)">
-                <input
-                    {...register("durationDays")}
-                    type="number" min="1"
-                    className={`${inputCls} ${errorBorder(!!errors.durationDays)}`}
-                />
-                <FieldError msg={errors.durationDays?.message} />
-              </FormField>
-            </div>
-
-            <Controller
-                name="isFeatured"
-                control={control}
-                render={({ field }) => (
-                    <label className="flex items-center gap-2.5 text-sm text-slate-600 cursor-pointer">
-                      <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded accent-amber-500"
-                          checked={field.value}
-                          onChange={e => field.onChange(e.target.checked)}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField label="Operator">
+                      <Controller
+                          name="operatorId"
+                          control={control}
+                          render={({ field }) => (
+                              <Dropdown
+                                  searchable
+                                  options={operatorOptions}
+                                  value={field.value}
+                                  onChange={field.onChange}
+                                  placeholder="Select operator"
+                                  width="w-full"
+                              />
+                          )}
                       />
-                      Mark as Featured ⭐
-                    </label>
-                )}
-            />
+                      <FieldError msg={errors.operatorId?.message} />
+                    </FormField>
+                    <FormField label="Status">
+                      <Controller
+                          name="status"
+                          control={control}
+                          render={({ field }) => (
+                              <Dropdown
+                                  options={FORM_STATUS_OPTIONS}
+                                  value={field.value}
+                                  onChange={v => field.onChange(v as "active" | "draft" | "archived")}
+                                  width="w-full"
+                              />
+                          )}
+                      />
+                    </FormField>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <FormField label="Price (USD)">
+                      <input {...register("priceUSD")} type="number" min="0" className={`${inputCls} ${errorBorder(!!errors.priceUSD)}`} />
+                      <FieldError msg={errors.priceUSD?.message} />
+                    </FormField>
+                    <FormField label="Price (ETB)">
+                      <input {...register("priceETB")} type="number" min="0" className={`${inputCls} ${errorBorder(!!errors.priceETB)}`} />
+                      <FieldError msg={errors.priceETB?.message} />
+                    </FormField>
+                    <FormField label="Duration (days)">
+                      <input {...register("durationDays")} type="number" min="1" className={`${inputCls} ${errorBorder(!!errors.durationDays)}`} />
+                      <FieldError msg={errors.durationDays?.message} />
+                    </FormField>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField label="Min group size">
+                      <input {...register("groupSizeMin")} type="number" min="1" className={`${inputCls} ${errorBorder(!!errors.groupSizeMin)}`} />
+                      <FieldError msg={errors.groupSizeMin?.message} />
+                    </FormField>
+                    <FormField label="Max group size">
+                      <input {...register("groupSizeMax")} type="number" min="1" className={`${inputCls} ${errorBorder(!!errors.groupSizeMax)}`} />
+                      <FieldError msg={errors.groupSizeMax?.message} />
+                    </FormField>
+                  </div>
+
+                  <Controller
+                      name="isFeatured"
+                      control={control}
+                      render={({ field }) => (
+                          <label className="flex items-center gap-2.5 text-sm text-slate-600 cursor-pointer">
+                            <input type="checkbox" className="w-4 h-4 rounded accent-amber-500"
+                                   checked={field.value} onChange={e => field.onChange(e.target.checked)} />
+                            Mark as Featured ⭐
+                          </label>
+                      )}
+                  />
+                </>
+            )}
+
+            {/* ── Itinerary ── */}
+            {activeTab === "itinerary" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-500">
+                    Build the day-by-day itinerary. Pin a location for each day — optional.
+                  </p>
+
+                  {itineraryFields.length === 0 && (
+                      <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center text-slate-400 text-sm">
+                        No itinerary days yet. Add a day below.
+                      </div>
+                  )}
+
+                  {itineraryFields.map((field, i) => (
+                      <ItineraryDayCard
+                          key={field.id}
+                          index={i}
+                          total={itineraryFields.length}
+                          register={register}
+                          control={control}
+                          errors={errors}
+                          onMoveUp={() => moveDay(i, i - 1)}
+                          onMoveDown={() => moveDay(i, i + 1)}
+                          onRemove={() => removeDay(i)}
+                      />
+                  ))}
+
+                  <button
+                      type="button"
+                      onClick={() => appendDay({ day: itineraryFields.length + 1, title: "", transportMode: "driving", description: "", latitude: "", longitude: "" })}
+                      className="flex items-center gap-2 text-sm text-cyan-600 hover:text-cyan-700 font-medium transition-colors"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M8 2v12M2 8h12"/>
+                    </svg>
+                    Add day
+                  </button>
+                </div>
+            )}
+
+            {/* ── Includes ── */}
+            {activeTab === "includes" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-500">
+                    List everything included in the tour price — accommodation, meals, guides, transport, etc.
+                  </p>
+
+                  {includesFields.length === 0 && (
+                      <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center text-slate-400 text-sm">
+                        No items yet. Add what's included below.
+                      </div>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    {includesFields.map((field, i) => (
+                        <div key={field.id} className="flex items-center gap-2">
+                    <span className="text-emerald-500 flex-shrink-0">
+                      <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M3 8l4 4 6-6"/>
+                      </svg>
+                    </span>
+                          <input
+                              {...register(`includes.${i}.item`)}
+                              className={`${inputCls} flex-1 ${errors.includes?.[i]?.item ? "border-red-400" : ""}`}
+                              placeholder="e.g. All accommodation (3-star hotels)"
+                          />
+                          <button type="button" onClick={() => removeInclude(i)}
+                                  className="text-slate-400 hover:text-red-400 transition-colors flex-shrink-0">
+                            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M3 3l10 10M13 3L3 13"/>
+                            </svg>
+                          </button>
+                        </div>
+                    ))}
+                  </div>
+
+                  <button
+                      type="button"
+                      onClick={() => appendInclude({ item: "" })}
+                      className="flex items-center gap-2 text-sm text-cyan-600 hover:text-cyan-700 font-medium transition-colors"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M8 2v12M2 8h12"/>
+                    </svg>
+                    Add item
+                  </button>
+                </div>
+            )}
+            {/* ── Excludes ── */}
+            {activeTab === "excludes" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-slate-500">
+                    List everything NOT included — flights, visa fees, personal expenses, tips, etc.
+                  </p>
+
+                  {excludesFields.length === 0 && (
+                      <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center text-slate-400 text-sm">
+                        No items yet. Add what's excluded below.
+                      </div>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    {excludesFields.map((field, i) => (
+                        <div key={field.id} className="flex items-center gap-2">
+          <span className="text-red-400 flex-shrink-0">
+            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M3 3l10 10M13 3L3 13"/>
+            </svg>
+          </span>
+                          <input
+                              {...register(`excludes.${i}.item`)}
+                              className={`${inputCls} flex-1 ${errors.excludes?.[i]?.item ? "border-red-400" : ""}`}
+                              placeholder="e.g. International flights"
+                          />
+                          <button
+                              type="button"
+                              onClick={() => removeExclude(i)}
+                              className="text-slate-400 hover:text-red-400 transition-colors flex-shrink-0"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M3 3l10 10M13 3L3 13"/>
+                            </svg>
+                          </button>
+                        </div>
+                    ))}
+                  </div>
+
+                  <button
+                      type="button"
+                      onClick={() => appendExclude({ item: "" })}
+                      className="flex items-center gap-2 text-sm text-cyan-600 hover:text-cyan-700 font-medium transition-colors"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M8 2v12M2 8h12"/>
+                    </svg>
+                    Add item
+                  </button>
+                </div>
+            )}
+
+            {/* ── Images ── */}
+            {activeTab === "media" && (
+                <Controller
+                    name="images"
+                    control={control}
+                    render={({ field }) => (
+                        <ImageUploader
+                            value={field.value ?? []}
+                            onChange={field.onChange}
+                            folder="tours"
+                            maxImages={12}
+                        />
+                    )}
+                />
+            )}
 
           </form>
         </Modal>
 
-        {/* Delete dialog */}
         <DeleteDialog
             open={!!deleteTarget}
             onClose={() => setDeleteTarget(null)}
@@ -436,7 +678,6 @@ export default function ToursClient({
             description="This will permanently remove the tour and all associated data."
             requireConfirmText={deleteTarget?.title}
         />
-
       </div>
   );
 }

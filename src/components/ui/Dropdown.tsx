@@ -50,7 +50,7 @@ export default function Dropdown({
     }, []);
 
     return (
-        <div ref={ref} className={`relative inline-block ${width} ${className}`}>
+        <div ref={ref} className={`relative inline-block z-1000 ${width} ${className}`}>
             {/* Trigger */}
             <button
                 type="button"
