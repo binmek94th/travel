@@ -3,6 +3,9 @@
 import { useRouter, usePathname } from "next/navigation";
 import { useCallback, useTransition, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { auth } from "@/src/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { toast } from "sonner";
 import Dropdown, { DropdownOption } from "@/src/components/ui/Dropdown";
 
 type Tour = {
@@ -32,7 +35,7 @@ const CAT_GRADIENTS: Record<string, string> = {
 };
 
 const DURATION_BADGES = [
-    { value: "all", label: "Any", icon: "🗓" },
+    { value: "all", label: "Any",      icon: "🗓" },
     { value: "1-3", label: "1–3 days", icon: "⚡" },
     { value: "4-7", label: "4–7 days", icon: "🌄" },
     { value: "8+",  label: "8+ days",  icon: "🏕" },
@@ -78,10 +81,115 @@ function useCountUp(target: number, active: boolean) {
     return v;
 }
 
-// ── HERO BACKGROUND — jeep on savanna ────────────────────────────────────────
+
+function useAuth() {
+    const router = useRouter();
+    const [uid, setUid] = useState<string | null | undefined>(undefined); // undefined = loading
+
+    useEffect(() => {
+        const unsub = onAuthStateChanged(auth, u => setUid(u ? u.uid : null));
+        return () => unsub();
+    }, []);
+
+    function redirectToSignup() {
+        const returnUrl = encodeURIComponent(window.location.pathname);
+        router.push(`/auth/signup?returnUrl=${returnUrl}`);
+    }
+
+    return { uid, redirectToSignup };
+}
+
+function SaveBtn({
+                     tourId, tourTitle, uid, redirectToSignup,
+                 }: {
+    tourId: string; tourTitle: string;
+    uid: string | null | undefined;
+    redirectToSignup: () => void;
+}) {
+    const [saved,   setSaved]   = useState(false);
+    const [saving,  setSaving]  = useState(false);
+    const [checked, setChecked] = useState(false);
+    const [bounce,  setBounce]  = useState(false);
+
+    // Check saved state once uid is known
+    useEffect(() => {
+        if (uid === undefined) return; // still loading
+        if (!uid) { setChecked(true); return; }
+        fetch(`/api/user/saved-tours?tourId=${tourId}`)
+            .then(r => r.json())
+            .then(d => { setSaved(d.saved ?? false); setChecked(true); })
+            .catch(() => setChecked(true));
+    }, [uid, tourId]);
+
+    async function toggle(e: React.MouseEvent) {
+        e.preventDefault(); // don't navigate to tour page
+        e.stopPropagation();
+
+        if (!uid) { redirectToSignup(); return; }
+
+        setSaving(true);
+        try {
+            if (saved) {
+                await fetch("/api/user/saved-tours", {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ tourId }),
+                });
+                setSaved(false);
+                toast.success("Removed from saved tours");
+            } else {
+                await fetch("/api/user/saved-tours", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ tourId, tourTitle }),
+                });
+                setSaved(true);
+                setBounce(true);
+                setTimeout(() => setBounce(false), 500);
+                toast.success("Tour saved!");
+            }
+        } catch {
+            toast.error("Something went wrong.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <button
+            onClick={toggle}
+            title={saved ? "Unsave" : uid ? "Save tour" : "Sign up to save"}
+            disabled={saving || uid === undefined}
+            className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-all disabled:opacity-50"
+            style={{
+                background: saved ? "rgba(239,68,68,0.92)" : "rgba(255,255,255,0.82)",
+                boxShadow:  saved
+                    ? "0 2px 12px rgba(239,68,68,0.40)"
+                    : "0 2px 8px rgba(0,0,0,0.18)",
+                transform: bounce ? "scale(1.35)" : "scale(1)",
+                transition: "transform 0.3s cubic-bezier(0.22,1,0.36,1), background 0.2s, box-shadow 0.2s",
+            }}
+        >
+            {saving ? (
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border border-white/40 border-t-white"/>
+            ) : (
+                <svg width="14" height="14" viewBox="0 0 16 16" fill={saved ? "white" : "none"}
+                     stroke={saved ? "white" : "rgba(10,61,82,0.7)"}
+                     strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 13.5S1.5 9.5 1.5 5.5a3.5 3.5 0 0 1 6.5-1.8A3.5 3.5 0 0 1 14.5 5.5c0 4-6.5 8-6.5 8z"/>
+                </svg>
+            )}
+        </button>
+    );
+}
+
+// ── HERO BACKGROUND ───────────────────────────────────────────────────────────
 function HeroBackground() {
     const [t, setT] = useState(0);
     const [mouse, setMouse] = useState({ x: 0.5, y: 0.5 });
+    const [jx, setJx] = useState(-130);
+    const [jy, setJy] = useState(0);
+    const [wheel, setWheel] = useState(0);
 
     useEffect(() => {
         let id: number;
@@ -92,16 +200,10 @@ function HeroBackground() {
         return () => { cancelAnimationFrame(id); window.removeEventListener("mousemove", onMouse); };
     }, []);
 
-    // Jeep state
-    const [jx, setJx] = useState(-130);
-    const [jy, setJy] = useState(0);
-    const [wheel, setWheel] = useState(0);
     useEffect(() => {
         let id: number;
         const tick = (now: number) => {
-            const W = window.innerWidth;
-            const dur = 20000;
-            const p = (now % dur) / dur;
+            const W = window.innerWidth, dur = 20000, p = (now % dur) / dur;
             setJx(-130 + p * (W + 260));
             setJy(Math.sin(p * Math.PI * 8) * 4 + Math.sin(p * Math.PI * 15) * 1.5);
             setWheel((now / 55) % 360);
@@ -113,15 +215,12 @@ function HeroBackground() {
 
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {/* Savanna gradient tint */}
             <div style={{ position:"absolute", inset:0, background:"linear-gradient(180deg,rgba(255,248,225,0.45) 0%,transparent 60%)" }}/>
-
-            {/* Parallax orbs */}
             {[
-                { cx:0.08, cy:0.25, size:360, depth:16, color:"rgba(40,184,232,0.09)",  phase:0  },
-                { cx:0.82, cy:0.08, size:480, depth:26, color:"rgba(14,133,178,0.07)",  phase:2  },
-                { cx:0.5,  cy:0.75, size:280, depth:12, color:"rgba(40,184,232,0.08)",  phase:4  },
-                { cx:0.95, cy:0.55, size:200, depth:20, color:"rgba(10,106,148,0.06)",  phase:1  },
+                { cx:0.08, cy:0.25, size:360, depth:16, color:"rgba(40,184,232,0.09)", phase:0 },
+                { cx:0.82, cy:0.08, size:480, depth:26, color:"rgba(14,133,178,0.07)", phase:2 },
+                { cx:0.5,  cy:0.75, size:280, depth:12, color:"rgba(40,184,232,0.08)", phase:4 },
+                { cx:0.95, cy:0.55, size:200, depth:20, color:"rgba(10,106,148,0.06)", phase:1 },
             ].map((orb, i) => {
                 const floatY = Math.sin(t * 0.0004 + orb.phase) * 14;
                 const mx = (mouse.x - orb.cx) * orb.depth;
@@ -136,8 +235,6 @@ function HeroBackground() {
                     }}/>
                 );
             })}
-
-            {/* Dot grid */}
             <div style={{
                 position:"absolute", inset:0,
                 backgroundImage:"radial-gradient(circle,rgba(14,133,178,0.11) 1px,transparent 1px)",
@@ -147,8 +244,6 @@ function HeroBackground() {
                 transform:`translate(${(mouse.x-0.5)*-8}px,${(mouse.y-0.5)*-4}px)`,
                 transition:"transform 0.2s ease-out",
             }}/>
-
-            {/* Acacia trees */}
             {[{x:"5%",s:0.55,o:0.10},{x:"20%",s:0.80,o:0.08},{x:"45%",s:0.60,o:0.07},{x:"65%",s:0.85,o:0.09},{x:"82%",s:0.65,o:0.08}].map((tr,i)=>(
                 <svg key={i} style={{ position:"absolute", bottom:"14%", left:tr.x, opacity:tr.o, transform:`scale(${tr.s})`, transformOrigin:"bottom center" }} width="65" height="70" viewBox="0 0 65 70">
                     <line x1="32" y1="70" x2="32" y2="30" stroke="#92400E" strokeWidth="4"/>
@@ -159,18 +254,12 @@ function HeroBackground() {
                     <ellipse cx="48" cy="32" rx="16" ry="12" fill="#065F46"/>
                 </svg>
             ))}
-
-            {/* Ground strip */}
             <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"20%", background:"linear-gradient(180deg,transparent,rgba(253,230,138,0.22))" }}/>
-
-            {/* Arc lines */}
             <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:0.05 }}>
                 <ellipse cx="80%" cy="0" rx="380" ry="260" fill="none" stroke="#1E9DC8" strokeWidth="1"/>
                 <ellipse cx="80%" cy="0" rx="520" ry="380" fill="none" stroke="#1E9DC8" strokeWidth="0.5"/>
                 <ellipse cx="5%"  cy="100%" rx="280" ry="180" fill="none" stroke="#1E9DC8" strokeWidth="0.8"/>
             </svg>
-
-            {/* JEEP */}
             <svg style={{ position:"absolute", bottom:"14%", left:jx, transform:`translateY(${jy}px)`, opacity:0.25 }} width="120" height="68" viewBox="0 0 120 68">
                 <rect x="8" y="20" width="104" height="34" rx="5" fill="#0A3D52"/>
                 <rect x="20" y="10" width="68" height="24" rx="4" fill="#0E85B2"/>
@@ -239,7 +328,11 @@ function DurationStrip({ active, onChange }: { active: string; onChange: (v: str
 }
 
 // ── TOUR CARD ─────────────────────────────────────────────────────────────────
-function TourCard({ tour, delay }: { tour: Tour; delay: number }) {
+function TourCard({ tour, delay, uid, redirectToSignup }: {
+    tour: Tour; delay: number;
+    uid: string | null | undefined;
+    redirectToSignup: () => void;
+}) {
     const { ref, visible } = useReveal();
     const [hovered, setHovered] = useState(false);
     const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
@@ -301,24 +394,18 @@ function TourCard({ tour, delay }: { tour: Tour; delay: number }) {
                 <div className={`relative flex h-52 items-center justify-center overflow-hidden bg-gradient-to-br ${catGradient} text-5xl`}>
                     {tour.images?.length > 0 ? (
                         <img src={tour.images[0]} alt={tour.title}
-                             className="absolute inset-0 h-full w-full object-cover"
-                             loading="lazy"
+                             className="absolute inset-0 h-full w-full object-cover" loading="lazy"
                              style={{ transform:hovered?"scale(1.08)":"scale(1)", transition:"transform 0.6s cubic-bezier(0.22,1,0.36,1)" }}/>
                     ) : (
                         <span style={{ transform:hovered?"scale(1.2) rotate(-8deg)":"scale(1)", transition:"transform 0.4s cubic-bezier(0.22,1,0.36,1)", display:"block" }}>
-              {CAT_ICONS[tour.categories[0]] ?? "🧭"}
-            </span>
+                            {CAT_ICONS[tour.categories[0]] ?? "🧭"}
+                        </span>
                     )}
-
-                    {/* Gradient overlay */}
                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[rgba(6,62,90,0.05)] to-[rgba(6,62,90,0.65)]"/>
-
-                    {/* Mouse glare */}
                     {hovered && (
                         <div style={{
                             position:"absolute", inset:0, pointerEvents:"none",
                             background:`radial-gradient(circle at ${mousePos.x*100}% ${mousePos.y*100}%,rgba(255,255,255,0.15) 0%,transparent 60%)`,
-                            transition:"background 0.1s",
                         }}/>
                     )}
 
@@ -329,7 +416,15 @@ function TourCard({ tour, delay }: { tour: Tour; delay: number }) {
                         ))}
                     </div>
 
-                    {/* Duration + bookings badges */}
+                    {/* ── SAVE BUTTON — top right ── */}
+                    <SaveBtn
+                        tourId={tour.id}
+                        tourTitle={tour.title}
+                        uid={uid}
+                        redirectToSignup={redirectToSignup}
+                    />
+
+                    {/* Duration + bookings */}
                     <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
                         {tour.bookingCount > 0 && (
                             <div className="flex items-center gap-1 rounded-md bg-amber-500/85 px-2 py-0.5 text-[0.62rem] font-bold text-white backdrop-blur-sm">
@@ -355,11 +450,7 @@ function TourCard({ tour, delay }: { tour: Tour; delay: number }) {
 
                 {/* Body */}
                 <div className="flex flex-1 flex-col p-5">
-                    <p className="mb-4 line-clamp-2 flex-1 text-sm font-light leading-relaxed text-[#1A6A8A]">
-                        {tour.description}
-                    </p>
-
-                    {/* Footer */}
+                    <p className="mb-4 line-clamp-2 flex-1 text-sm font-light leading-relaxed text-[#1A6A8A]">{tour.description}</p>
                     <div className="flex items-center justify-between border-t border-[#EBF8FF] pt-3">
                         <div className="flex items-center gap-1 text-sm font-bold text-[#0A3D52]">
                             {tour.avgRating > 0 ? (
@@ -376,9 +467,9 @@ function TourCard({ tour, delay }: { tour: Tour; delay: number }) {
                         </div>
                         <div className="flex flex-col items-end">
                             <span className="text-[0.62rem] font-light text-[#1A6A8A]">from</span>
-                            <span className="text-lg font-bold text-[#1E9DC8]" style={{ transition:"color 0.2s", color:hovered?"#0A6A94":"#1E9DC8" }}>
-                ${tour.priceUSD.toLocaleString()}
-              </span>
+                            <span className="text-lg font-bold" style={{ color:hovered?"#0A6A94":"#1E9DC8", transition:"color 0.2s" }}>
+                                ${tour.priceUSD.toLocaleString()}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -420,6 +511,7 @@ export default function ToursPublicClient({
     const pathname = usePathname();
     const [pending, startTransition] = useTransition();
     const heroReveal = useReveal();
+    const { uid, redirectToSignup } = useAuth();
 
     const baseParams = { category, duration, sort, maxPrice: maxPrice > 0 ? String(maxPrice) : "" };
 
@@ -461,15 +553,15 @@ export default function ToursPublicClient({
     return (
         <div className="min-h-screen bg-white">
             <style>{`
-        .hide-scrollbar::-webkit-scrollbar{display:none}
-        .hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
-        @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
-        @keyframes bounce-gentle{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-      `}</style>
+                .hide-scrollbar::-webkit-scrollbar{display:none}
+                .hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+                @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+                @keyframes bounce-gentle{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+            `}</style>
 
             {/* ── HERO ── */}
             <div className="relative overflow-hidden bg-gradient-to-br from-[#EBF8FF] via-white to-[#EBF8FF] px-6 pb-16 pt-28 border-b border-[rgba(14,133,178,0.08)]">
-                <HeroBackground />
+                <HeroBackground/>
                 <div className="relative mx-auto max-w-6xl">
                     <div ref={heroReveal.ref} style={{ opacity:heroReveal.visible?1:0, transform:heroReveal.visible?"translateY(0)":"translateY(24px)", transition:"opacity 0.8s ease,transform 0.8s ease" }}>
                         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[rgba(14,133,178,0.18)] bg-[#EBF8FF] px-4 py-1.5">
@@ -484,13 +576,11 @@ export default function ToursPublicClient({
                             Expert-guided tours across every corner of Ethiopia — from single-day cultural walks to multi-week wilderness expeditions.
                         </p>
                     </div>
-
-                    {/* Stat pills */}
                     <div className="mt-10 flex flex-wrap gap-3">
-                        <StatPill icon="🧭" target={total}  suffix="+" label="Tours"          delay={100}/>
-                        <StatPill icon="👥" target={120}    suffix="+"  label="Expert guides"  delay={200}/>
-                        <StatPill icon="⭐" target={49} suffix="/50"    label="Avg rating"     delay={300}/>
-                        <StatPill icon="🌍" target={8}               label="Regions covered"  delay={400}/>
+                        <StatPill icon="🧭" target={total} suffix="+" label="Tours"         delay={100}/>
+                        <StatPill icon="👥" target={120}   suffix="+" label="Expert guides" delay={200}/>
+                        <StatPill icon="⭐" target={49} suffix="/50"  label="Avg rating"    delay={300}/>
+                        <StatPill icon="🌍" target={8}               label="Regions"        delay={400}/>
                     </div>
                 </div>
             </div>
@@ -498,28 +588,24 @@ export default function ToursPublicClient({
             {/* ── DURATION STRIP ── */}
             <div className="border-b border-[rgba(14,133,178,0.07)] bg-gradient-to-r from-[#F8FCFF] to-white px-6 py-4">
                 <div className="mx-auto max-w-6xl">
-                    <DurationStrip active={duration} onChange={v => push({ duration: v })} />
+                    <DurationStrip active={duration} onChange={v => push({ duration: v })}/>
                 </div>
             </div>
 
             {/* ── STICKY FILTERS ── */}
             <div className="sticky top-16 z-40 border-b border-[rgba(14,133,178,0.08)] bg-white/96 px-6 py-3 shadow-[0_2px_20px_rgba(14,133,178,0.07)] backdrop-blur-lg">
                 <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
-                    <Dropdown options={categoryOptions} value={category}        onChange={v => push({ category: v })}  width="w-40"/>
-                    <Dropdown options={priceOptions}    value={String(maxPrice)} onChange={v => push({ maxPrice: v })} width="w-40"/>
+                    <Dropdown options={categoryOptions} value={category}         onChange={v => push({ category: v })} width="w-40"/>
+                    <Dropdown options={priceOptions}    value={String(maxPrice)}  onChange={v => push({ maxPrice: v })} width="w-40"/>
                     <div className="h-6 w-px bg-[rgba(14,133,178,0.12)]"/>
-                    <Dropdown options={sortOptions}     value={sort}             onChange={v => push({ sort: v })}     width="w-44"/>
-
+                    <Dropdown options={sortOptions}     value={sort}              onChange={v => push({ sort: v })}     width="w-44"/>
                     {activeFiltersCount > 0 && (
                         <button onClick={() => push({ category:"all", duration:"all", maxPrice:"0" })}
                                 className="flex items-center gap-1.5 rounded-full bg-[#1E9DC8] px-3 py-1 text-[0.7rem] font-bold text-white transition-all hover:bg-[#0E85B2]">
                             {activeFiltersCount} active
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                <path d="M2 2l6 6M8 2L2 8"/>
-                            </svg>
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg>
                         </button>
                     )}
-
                     <span className="ml-auto text-xs font-light text-[#1A6A8A]">{total} tour{total !== 1 ? "s" : ""}</span>
                 </div>
             </div>
@@ -527,7 +613,6 @@ export default function ToursPublicClient({
             {/* ── GRID ── */}
             <div className="mx-auto max-w-6xl px-6 pb-24 pt-10">
                 <div className="relative">
-                    {/* Loading overlay */}
                     <div className={`absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/75 backdrop-blur-sm transition-opacity duration-300 ${pending?"opacity-100 pointer-events-auto":"opacity-0 pointer-events-none"}`}>
                         <div className="flex flex-col items-center gap-3">
                             <div className="relative h-12 w-12">
@@ -554,7 +639,13 @@ export default function ToursPublicClient({
                     ) : (
                         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                             {tours.map((tour, i) => (
-                                <TourCard key={tour.id} tour={tour} delay={Math.min(i % 6, 5) * 70}/>
+                                <TourCard
+                                    key={tour.id}
+                                    tour={tour}
+                                    delay={Math.min(i % 6, 5) * 70}
+                                    uid={uid}
+                                    redirectToSignup={redirectToSignup}
+                                />
                             ))}
                         </div>
                     )}
@@ -567,7 +658,7 @@ export default function ToursPublicClient({
                               className={`flex h-9 w-9 items-center justify-center rounded-lg border border-[rgba(14,133,178,0.18)] bg-white text-[#1A6A8A] transition-all hover:border-[#1E9DC8] hover:bg-[#EBF8FF] ${page<=1?"pointer-events-none opacity-30":""}`}>
                             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 2L4 7l5 5"/></svg>
                         </Link>
-                        {pageNumbers.map((p,i) =>
+                        {pageNumbers.map((p, i) =>
                             p === "…" ? (
                                 <span key={`el-${i}`} className="px-1 text-sm text-[#1A6A8A]">…</span>
                             ) : (

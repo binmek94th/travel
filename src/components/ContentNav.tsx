@@ -189,7 +189,8 @@ export default function ContentNav() {
     // Which page are we on?
     const isDestinations = pathname?.startsWith("/destinations");
     const links = isDestinations ? DESTINATIONS_LINKS : TOURS_LINKS;
-    const pageLabel = isDestinations ? "Destinations" : "Tours";
+    const isSaved = pathname?.startsWith("/saved");
+    const pageLabel = isDestinations ? "Destinations" : isSaved ? "Saved" : "Tours";
     const pageColor = isDestinations ? "#0A6A94" : "#065F46";
 
     useEffect(() => {

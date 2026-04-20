@@ -8,7 +8,8 @@ export default function ConditionalNav() {
 
     const showNav =
         pathname?.startsWith("/destinations") ||
-        pathname?.startsWith("/tours");
+        pathname?.startsWith("/tours") ||
+        pathname?.startsWith("/saved");
 
     if (!showNav) return null;
 

@@ -1,50 +1,37 @@
+// src/app/api/auth/session/route.ts
+// Make sure the cookie is set with the right flags so it's readable server-side
+
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/src/lib/firebase-admin";
-import { cookies } from "next/headers";
-
-const FIVE_DAYS_MS = 60 * 60 * 24 * 5 * 1000;
 
 export async function POST(req: NextRequest) {
   try {
     const { idToken } = await req.json();
-    if (!idToken) return NextResponse.json({ error: "Missing idToken" }, { status: 400 });
+    if (!idToken) return NextResponse.json({ error: "idToken required" }, { status: 400 });
 
-    // Verify the token first so you can inspect claims
-    const decoded = await adminAuth.verifyIdToken(idToken);
-    const role    = decoded.role ?? "traveler"; // fallback to traveler
+    // 5-day session cookie
+    const expiresIn   = 60 * 60 * 24 * 5 * 1000;
+    const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
 
-    const sessionCookie = await adminAuth.createSessionCookie(idToken, {
-      expiresIn: FIVE_DAYS_MS,
-    });
+    const res = NextResponse.json({ ok: true });
 
-    const cookieStore = await cookies();
-    cookieStore.set("__session", sessionCookie, {
+    res.cookies.set("session", sessionCookie, {
+      maxAge:   expiresIn / 1000,
       httpOnly: true,
       secure:   process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge:   FIVE_DAYS_MS / 1000,
+      sameSite: "lax",       // ← "lax" (not "strict") so cookie is sent on navigation
       path:     "/",
     });
 
-    // Optionally set a separate readable role cookie for middleware
-    cookieStore.set("role", role, {
-      httpOnly: false,       // readable client-side if needed
-      secure:   process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge:   FIVE_DAYS_MS / 1000,
-      path:     "/",
-    });
-
-    return NextResponse.json({ status: "ok", role });
-  } catch (err) {
-    console.error("Session error:", err);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return res;
+  } catch (err: any) {
+    console.error("[session/POST]", err);
+    return NextResponse.json({ error: "Failed to create session" }, { status: 401 });
   }
 }
 
 export async function DELETE() {
-  const cookieStore = await cookies();
-  cookieStore.delete("__session");
-  cookieStore.delete("role");
-  return NextResponse.json({ status: "ok" });
+  const res = NextResponse.json({ ok: true });
+  res.cookies.set("session", "", { maxAge: 0, path: "/" });
+  return res;
 }

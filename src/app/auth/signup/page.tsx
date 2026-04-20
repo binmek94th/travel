@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,7 +12,6 @@ import {
 } from "@/src/lib/auth-ui";
 import NationalityDropdown from "@/src/components/ui/NationalityDropdown";
 
-// ── Password strength ─────────────────────────────────────────────────────────
 const STRENGTH_LEVELS = [
   { bars: 1, label: "Weak",   cls: "s1", cssVar: "var(--color-strength-weak)"   },
   { bars: 2, label: "Fair",   cls: "s2", cssVar: "var(--color-strength-fair)"   },
@@ -29,7 +29,6 @@ function getStrength(pw: string) {
   return STRENGTH_LEVELS[Math.min(score, 3)];
 }
 
-// ── Schema ────────────────────────────────────────────────────────────────────
 const schema = z.object({
   name:        z.string().min(2, "Name must be at least 2 characters"),
   email:       z.string().email("Please enter a valid email"),
@@ -42,40 +41,34 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function SignupPage() {
   const { signup, signInWithGoogle, loading, googleLoading, error, setError } = useAuth();
   const [showPass, setShowPass] = useState(false);
 
+  const searchParams = useSearchParams();
+  const returnUrl    = searchParams.get("returnUrl") ?? "/";
+
   const {
-    register,
-    handleSubmit,
-    control,
-    watch,
+    register, handleSubmit, control, watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      name: "", email: "", password: "",
-      nationality: "", agreed: undefined,
-    },
+    defaultValues: { name: "", email: "", password: "", nationality: "", agreed: undefined },
   });
 
   const password = watch("password");
   const strength = getStrength(password ?? "");
   const agreed   = watch("agreed");
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
   async function onSubmit(data: FormValues) {
-    await signup(data.name, data.email, data.password, data.nationality);
+    await signup(data.name, data.email, data.password, data.nationality, returnUrl);
   }
 
   return (
       <>
-        {/* Tab navigation */}
         <div className="tab-pills">
-          <Link href="/auth/login"  className="pill">Sign in</Link>
-          <Link href="/auth/signup" className="pill active">Create account</Link>
+          <Link href={`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`}  className="pill">Sign in</Link>
+          <Link href={`/auth/signup?returnUrl=${encodeURIComponent(returnUrl)}`} className="pill active">Create account</Link>
         </div>
 
         <div className="card">
@@ -84,10 +77,9 @@ export default function SignupPage() {
             <p className="card-sub">Create your free account</p>
           </div>
 
-          {/* Google */}
           <button
               className="google-btn"
-              onClick={signInWithGoogle}
+              onClick={() => signInWithGoogle(returnUrl)}
               disabled={googleLoading || loading}
               type="button"
           >
@@ -97,12 +89,9 @@ export default function SignupPage() {
 
           <WaveDivider />
 
-          {/* Server / Firebase errors */}
           {error && <ErrorBox message={error} onDismiss={() => setError(null)} />}
 
           <form onSubmit={handleSubmit(onSubmit)} className="fields" noValidate>
-
-            {/* Full name */}
             <div className="fg">
               <label className="flabel" htmlFor="signup-name">Full name</label>
               <input
@@ -115,12 +104,11 @@ export default function SignupPage() {
               />
               {errors.name && <p className="ferr">{errors.name.message}</p>}
             </div>
+
             <div className="fg">
               <label className="flabel">
                 Nationality
-                <span style={{ opacity: 0.45, fontWeight: 400, marginLeft: 4 }}>
-                (optional)
-              </span>
+                <span style={{ opacity: 0.45, fontWeight: 400, marginLeft: 4 }}>(optional)</span>
               </label>
               <Controller
                   name="nationality"
@@ -135,7 +123,6 @@ export default function SignupPage() {
               />
             </div>
 
-            {/* Email */}
             <div className="fg">
               <label className="flabel" htmlFor="signup-email">Email address</label>
               <input
@@ -149,7 +136,6 @@ export default function SignupPage() {
               {errors.email && <p className="ferr">{errors.email.message}</p>}
             </div>
 
-            {/* Password + strength */}
             <div className="fg">
               <label className="flabel" htmlFor="signup-password">Password</label>
               <div className="fw fw--icon">
@@ -171,28 +157,18 @@ export default function SignupPage() {
                 </button>
               </div>
               {errors.password && <p className="ferr">{errors.password.message}</p>}
-
-              {/* Strength bars */}
               {strength && (
                   <div className="sw">
                     <div className="sbars">
-                      {[1, 2, 3, 4].map(i => (
-                          <div
-                              key={i}
-                              className={`sbar${i <= strength.bars ? ` ${strength.cls}` : ""}`}
-                          />
+                      {[1,2,3,4].map(i => (
+                          <div key={i} className={`sbar${i <= strength.bars ? ` ${strength.cls}` : ""}`}/>
                       ))}
                     </div>
-                    <span className="slabel" style={{ color: strength.cssVar }}>
-                  {strength.label}
-                </span>
+                    <span className="slabel" style={{ color: strength.cssVar }}>{strength.label}</span>
                   </div>
               )}
             </div>
 
-
-
-            {/* Terms */}
             <div className="fg">
               <Controller
                   name="agreed"
@@ -209,9 +185,8 @@ export default function SignupPage() {
                         >
                           {field.value && (
                               <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-                                   stroke="var(--color-checkbox-check)"
-                                   strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M1.5 5l2.5 2.5 4.5-4" />
+                                   stroke="var(--color-checkbox-check)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M1.5 5l2.5 2.5 4.5-4"/>
                               </svg>
                           )}
                         </div>
@@ -227,35 +202,22 @@ export default function SignupPage() {
               {errors.agreed && <p className="ferr">{errors.agreed.message}</p>}
             </div>
 
-            <button
-                type="submit"
-                className="sub-btn"
-                disabled={loading || googleLoading || !agreed}
-            >
+            <button type="submit" className="sub-btn" disabled={loading || googleLoading || !agreed}>
               {loading ? <span className="spin" /> : "Create account"}
             </button>
           </form>
 
           <p className="form-footer">
             Already have an account?{" "}
-            <Link href="/login" className="form-link">Sign in</Link>
+            <Link href={`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`} className="form-link">Sign in</Link>
           </p>
         </div>
 
-        {/* Add .ferr and .fi--error to your formStyles */}
         <style>{formStyles}</style>
         <style>{`
-        .ferr {
-          font-size: 11px;
-          color: var(--color-strength-weak, #ef4444);
-          margin-top: 4px;
-        }
-        .fi--error {
-          border-color: var(--color-strength-weak, #ef4444) !important;
-        }
-        .chk-box--error {
-          border-color: var(--color-strength-weak, #ef4444);
-        }
+        .ferr { font-size:11px; color:var(--color-strength-weak,#ef4444); margin-top:4px; }
+        .fi--error { border-color:var(--color-strength-weak,#ef4444) !important; }
+        .chk-box--error { border-color:var(--color-strength-weak,#ef4444); }
       `}</style>
       </>
   );
