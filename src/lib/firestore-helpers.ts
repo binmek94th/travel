@@ -35,13 +35,13 @@ export async function fetchCollection(
 
 /** Count documents in a collection */
 export async function countCollection(
-  col: string,
-  where?: [string, FirebaseFirestore.WhereFilterOp, any][]
+    col: string,
+    where?: [string, FirebaseFirestore.WhereFilterOp, any][]
 ) {
   let q: FirebaseFirestore.Query = adminDb.collection(col);
   if (where) for (const [f, op, v] of where) q = q.where(f, op, v);
-  const snap = await q.count().get();
-  return snap.data().count as number;
+  const snap = await q.select().get();
+  return snap.size;
 }
 
 /** Format a date string cleanly */
