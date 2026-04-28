@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import {Suspense, useState} from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/src/lib/useAuth";
 import { formStyles, WaveDivider, GoogleIcon, EyeOn, EyeOff, ErrorBox } from "@/src/lib/auth-ui";
 
-export default function LoginPage() {
+function LoginContent() {
   const { login, signInWithGoogle, loading, googleLoading, error, setError } = useAuth();
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -102,5 +102,14 @@ export default function LoginPage() {
 
         <style>{formStyles}</style>
       </>
+  );
+}
+
+
+export default function LoginPage() {
+  return (
+      <Suspense fallback={<div />}>
+        <LoginContent />
+      </Suspense>
   );
 }
