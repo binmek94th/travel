@@ -343,6 +343,8 @@ function HomeNav({ user, loading }: { user: User | null; loading: boolean }) {
                           { label:"Saved",        href:"/saved"        },
                           { label:"My bookings",  href:"/bookings"     },
                           { label:"Community",    href:"/community"    },
+                          { label:"Profile",    href:"/profile"    },
+                          { label:"Settings",    href:"/settings"    },
                         ].map(item=>(
                             <a key={item.label} href={item.href}
                                style={{ display:"block", padding:"0.6rem 1rem", fontSize:"0.83rem", color:"#1A6A8A", textDecoration:"none", transition:"background 0.12s" }}
