@@ -1,32 +1,38 @@
 // src/app/api/ai-planner/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-export const maxDuration = 60; // allow up to 60s for streaming
+export const maxDuration = 60;
 
 const SYSTEM_PROMPT = `You are an expert Ethiopia travel planner for Tizitaw Ethiopia — a curated travel platform.
 
 Your role is to create deeply personalised, practical, and inspiring itineraries for Ethiopia.
 
 PLATFORM CONTEXT:
-You have access to a list of real destinations and tours available on the platform. When you recommend a destination or tour, include its ID tag so the user can see a clickable card:
-- For destinations: [dest:DESTINATION_ID]
-- For tours: [tour:TOUR_ID]
+You have access to real destinations, tours, routes, events, and guides available on the platform. When you recommend any of these, include its ID tag so the user can see a clickable card:
+- Destinations: [dest:DESTINATION_ID]
+- Tours:        [tour:TOUR_ID]
+- Routes:       [route:ROUTE_ID]
+- Events:       [event:EVENT_ID]
+- Guides:       [guide:GUIDE_ID]
 
-Only include these tags for items actually in the provided lists. Place the tag immediately after mentioning the name.
+Only include tags for items actually in the provided lists. Place the tag immediately after mentioning the name.
 
 WHAT TO INCLUDE IN AN ITINERARY:
 1. Day-by-day plan — specific destinations, activities, travel time between stops, suggested accommodation tier
-2. Suggested platform tours — match to the user's style and budget
-3. Budget breakdown — accommodation, food, transport, tours, miscellaneous (per person, in USD)
-4. Best time to visit — seasonal advice for the specific regions
-5. Packing tips — tailored to travel style (adventure vs culture vs photography etc.)
+2. Curated routes — suggest a matching platform route if one covers the user's regions
+3. Suggested tours — match to the user's style and budget
+4. Events — flag any relevant festivals or ceremonies happening in the requested timeframe
+5. Guides — suggest a local guide if one operates in the key regions
+6. Budget breakdown — accommodation, food, transport, tours, miscellaneous (per person, in USD)
+7. Best time to visit — seasonal advice for the specific regions
+8. Packing tips — tailored to travel style
 
 FORMATTING:
 - Use clear headings (##) and bullet points
 - Day headers like: ## Day 1–2: Addis Ababa
 - Keep tone warm, knowledgeable, and inspiring
 - Include practical logistics (internal flights vs road, journey times)
-- Flag must-book-in-advance items
+- Flag must-book-in-advance items and upcoming events
 
 ETHIOPIA EXPERTISE:
 - Dry season (Oct–March) is generally best for most regions
@@ -41,33 +47,59 @@ ETHIOPIA EXPERTISE:
 Always be honest about challenges (distance, altitude, cost) while keeping the spirit adventurous and encouraging.`;
 
 export async function POST(req: NextRequest) {
-    const { messages, destinations, tours } = await req.json();
+    const { messages, destinations, tours, routes, events, guides } = await req.json();
 
     if (!messages?.length) {
         return NextResponse.json({ error: "messages required" }, { status: 400 });
     }
 
-    // Build context string of available platform content
-    const destContext = destinations
+    const destContext = (destinations ?? [])
         .map((d: any) => `- ${d.name} [dest:${d.id}] | Region: ${d.region} | Categories: ${d.categories?.join(", ")} | ${d.description}`)
         .join("\n");
 
-    const tourContext = tours
+    const tourContext = (tours ?? [])
         .map((t: any) => `- ${t.title} [tour:${t.id}] | ${t.durationDays}d | $${t.priceUSD} | Region: ${t.region} | Categories: ${t.categories?.join(", ")} | ${t.description}`)
         .join("\n");
 
+    const routeContext = (routes ?? []).length
+        ? (routes as any[])
+            .map(r => `- ${r.name} [route:${r.id}] | ${r.totalDays} days | Stops: ${r.stops?.map((s: any) => s.destName ?? s.destinationId).join(" → ")} | ${r.description}`)
+            .join("\n")
+        : "None listed";
+
+    const eventContext = (events ?? []).length
+        ? (events as any[])
+            .map(e => `- ${e.name} [event:${e.id}] | Type: ${e.type} | Dates: ${e.startDate}→${e.endDate} | Location: ${e.location ?? e.destName ?? ""} | ${e.description}`)
+            .join("\n")
+        : "None listed";
+
+    const guideContext = (guides ?? []).length
+        ? (guides as any[])
+            .map(g => `- ${g.name} [guide:${g.id}] | Regions: ${g.regions?.join(", ")} | Languages: ${g.languages?.join(", ")} | Specialties: ${g.specialties?.join(", ")} | ${g.bio}`)
+            .join("\n")
+        : "None listed";
+
     const contextualSystem = `${SYSTEM_PROMPT}
 
-AVAILABLE DESTINATIONS ON THE PLATFORM:
+AVAILABLE DESTINATIONS:
 ${destContext}
 
-AVAILABLE TOURS ON THE PLATFORM:
+AVAILABLE TOURS:
 ${tourContext}
 
-When recommending any of these, use the [dest:ID] or [tour:ID] tag format so they render as cards.`;
+AVAILABLE ROUTES (multi-day curated itineraries):
+${routeContext}
+
+UPCOMING EVENTS & FESTIVALS:
+${eventContext}
+
+AVAILABLE LOCAL GUIDES:
+${guideContext}
+
+When recommending any of the above, use the appropriate ID tag so it renders as a clickable card.`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method:  "POST",
+        method: "POST",
         headers: {
             "Content-Type":      "application/json",
             "anthropic-version": "2023-06-01",
@@ -87,34 +119,24 @@ When recommending any of these, use the [dest:ID] or [tour:ID] tag format so the
         return NextResponse.json({ error: err }, { status: response.status });
     }
 
-    // Stream the response back to the client as SSE
     const encoder = new TextEncoder();
-
-    const stream = new ReadableStream({
+    const stream  = new ReadableStream({
         async start(controller) {
             const reader  = response.body!.getReader();
             const decoder = new TextDecoder();
-
             try {
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-
                     const chunk = decoder.decode(value, { stream: true });
-
                     for (const line of chunk.split("\n")) {
                         if (!line.startsWith("data: ")) continue;
                         const data = line.slice(6).trim();
-                        if (data === "[DONE]") {
-                            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-                            break;
-                        }
+                        if (data === "[DONE]") { controller.enqueue(encoder.encode("data: [DONE]\n\n")); break; }
                         try {
                             const parsed = JSON.parse(data);
-                            // Anthropic streaming: content_block_delta events contain the text
                             if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
-                                const text = parsed.delta.text;
-                                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
+                                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: parsed.delta.text })}\n\n`));
                             }
                             if (parsed.type === "message_stop") {
                                 controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -122,18 +144,11 @@ When recommending any of these, use the [dest:ID] or [tour:ID] tag format so the
                         } catch {}
                     }
                 }
-            } finally {
-                controller.close();
-                reader.releaseLock();
-            }
+            } finally { controller.close(); reader.releaseLock(); }
         },
     });
 
     return new NextResponse(stream, {
-        headers: {
-            "Content-Type":  "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection":    "keep-alive",
-        },
+        headers: { "Content-Type":"text/event-stream", "Cache-Control":"no-cache", "Connection":"keep-alive" },
     });
 }

@@ -18,6 +18,7 @@ export default function ConditionalNav() {
         pathname?.startsWith("/cookies") ||
         pathname?.startsWith("/terms") ||
         pathname?.startsWith("/settings") ||
+        pathname?.startsWith("/contact") ||
         pathname?.startsWith("/cancellation");
 
     if (!showNav) return null;

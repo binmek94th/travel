@@ -136,6 +136,15 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
             { label: "Events",      href: "/events"      },
         ],
     },
+    "/contact": {
+        label: "Contact", color: "#0a9436",
+        links: [
+            { label: "Destinations", href: "/destinations" },
+            { label: "Tours",        href: "/tours"        },
+            { label: "Routes",      href: "/routes"      },
+            { label: "Events",      href: "/events"      },
+        ],
+    },
 };
 
 function getConfig(pathname: string) {
