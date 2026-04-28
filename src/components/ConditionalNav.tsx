@@ -10,7 +10,15 @@ export default function ConditionalNav() {
         pathname?.startsWith("/destinations") ||
         pathname?.startsWith("/tours") ||
         pathname?.startsWith("/saved") ||
-        pathname?.startsWith("/bookings");
+        pathname?.startsWith("/bookings") ||
+        pathname?.startsWith("/events") ||
+        pathname?.startsWith("/routes") ||
+        pathname?.startsWith("/profile") ||
+        pathname?.startsWith("/privacy") ||
+        pathname?.startsWith("/cookies") ||
+        pathname?.startsWith("/terms") ||
+        pathname?.startsWith("/settings") ||
+        pathname?.startsWith("/cancellation");
 
     if (!showNav) return null;
 

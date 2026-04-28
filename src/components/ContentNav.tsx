@@ -67,8 +67,68 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
             { label: "Community",    href: "/community"     },
         ],
     },
+    "/settings": {
+        label: "Settings", color: "#0A6A94",
+        links: [
+            { label: "Destinations", href: "/destinations" },
+            { label: "Tours",        href: "/tours"        },
+            { label: "Routes",      href: "/routes"      },
+            { label: "Events",      href: "/events"      },
+            { label: "Community",    href: "/community"     },
+        ],
+    },
+    "/profile": {
+        label: "Profile", color: "#0A6A94",
+        links: [
+            { label: "Destinations", href: "/destinations" },
+            { label: "Tours",        href: "/tours"        },
+            { label: "Routes",      href: "/routes"      },
+            { label: "Events",      href: "/events"      },
+            { label: "Community",    href: "/community"     },
+        ],
+    },
+
     "/community": {
         label: "Community", color: "#0a9436",
+        links: [
+            { label: "Destinations", href: "/destinations" },
+            { label: "Tours",        href: "/tours"        },
+            { label: "Routes",      href: "/routes"      },
+            { label: "Events",      href: "/events"      },
+        ],
+    },
+    "/terms": {
+        label: "Terms", color: "#0A6A94",
+        links: [
+            { label: "Destinations", href: "/destinations" },
+            { label: "Tours",        href: "/tours"        },
+            { label: "Routes",      href: "/routes"      },
+            { label: "Events",      href: "/events"      },
+            { label: "Community",    href: "/community"     },
+        ],
+    },
+    "/cookies": {
+        label: "Cookies", color: "#0A6A94",
+        links: [
+            { label: "Destinations", href: "/destinations" },
+            { label: "Tours",        href: "/tours"        },
+            { label: "Routes",      href: "/routes"      },
+            { label: "Events",      href: "/events"      },
+            { label: "Community",    href: "/community"     },
+        ],
+    },
+
+    "/privacy": {
+        label: "Privacy", color: "#0a9436",
+        links: [
+            { label: "Destinations", href: "/destinations" },
+            { label: "Tours",        href: "/tours"        },
+            { label: "Routes",      href: "/routes"      },
+            { label: "Events",      href: "/events"      },
+        ],
+    },
+    "/cancellation": {
+        label: "Cancellation", color: "#0a9436",
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
