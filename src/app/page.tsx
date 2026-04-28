@@ -529,8 +529,8 @@ export default function HomePage() {
         <div id="stats-row" style={{ position:"relative", background:"linear-gradient(135deg,#062B3A 0%,#0A4D66 50%,#0D6E8A 100%)", padding:"2.5rem 1.5rem", overflow:"hidden" }}>
           <OceanBackground/>
           <div style={{ position:"relative", zIndex:2, maxWidth:1200, margin:"0 auto", display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"1rem" }} className="stats-grid">
-            <Stat num={80}  suffix="+"  label="Destinations"   go={statsGo}/>
-            <Stat num={200} suffix="+"  label="Curated tours"  go={statsGo}/>
+            <Stat num={40}  suffix="+"  label="Destinations"   go={statsGo}/>
+            <Stat num={80} suffix="+"  label="Curated tours"  go={statsGo}/>
             <Stat num={12}  suffix="K+" label="Happy travelers" go={statsGo}/>
             <Stat num={4.9} suffix="★"  label="Average rating" dec={1} go={statsGo}/>
           </div>
