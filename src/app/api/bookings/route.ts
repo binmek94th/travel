@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/src/lib/firebase-admin";
 import Stripe from "stripe";
+import {createAdminNotification} from "@/src/lib/admin-notifications";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -78,6 +79,14 @@ export async function POST(req: NextRequest) {
 
         // Create Stripe Checkout Session
         const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+        await createAdminNotification({
+            type:      "new_booking",
+            message:   `New booking: ${user.displayName} → ${tourId} on ${startDate}`,
+            bookingId: bookingRef.id,
+            userId:    uid,
+        });
+
 
         const session = await stripe.checkout.sessions.create({
             mode: "payment",

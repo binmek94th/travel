@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import {Toaster} from "sonner";
-import ContentNav from "@/src/components/ContentNav";
 import ConditionalNav from "@/src/components/ConditionalNav";
 import AIPlannerProvider from "@/src/components/AIPlannerProvider";
+import {ClientProviders} from "@/src/components/providers/ClientProviders";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,6 +26,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+
   return (
     <html
       lang="en"
@@ -33,7 +34,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
       <ConditionalNav />
+      <ClientProviders>
       {children}
+      </ClientProviders>
       <AIPlannerProvider />
       <Toaster position="bottom-right" />
       </body>

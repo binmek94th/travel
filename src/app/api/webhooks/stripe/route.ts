@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { adminDb } from "@/src/lib/firebase-admin";
+import {createAdminNotification} from "@/src/lib/admin-notifications";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -54,6 +55,11 @@ export async function POST(req: NextRequest) {
                         : 1,
                 });
             }
+            await createAdminNotification({
+                type:      "payment_received",
+                message:   `Payment received via Stripe for booking #${bookingId.slice(0,8)}`,
+                bookingId,
+            });
 
             console.log(`[webhook] Booking ${bookingId} confirmed`);
         } catch (err) {

@@ -65,7 +65,7 @@ export function Btn({
 }: {
   variant?: BtnVariant;
   size?: "sm" | "md";
-  onClick?: () => void;
+  onClick?: any;
   disabled?: boolean;
   type?: "button" | "submit";
   children: ReactNode;
@@ -103,9 +103,9 @@ export function Th({ children, className = "" }: { children: ReactNode; classNam
   );
 }
 
-export function Td({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Td({ children, className = "", onClick }: { children: ReactNode; className?: string; onClick?: any }) {
   return (
-    <td className={`px-4 py-3 border-b border-slate-50 align-middle ${className}`}>
+    <td onClick={onClick} className={`px-4 py-3 border-b border-slate-50 align-middle ${className}`}>
       {children}
     </td>
   );

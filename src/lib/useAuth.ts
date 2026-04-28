@@ -1,14 +1,15 @@
 // src/lib/useAuth.ts
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
   updateProfile,
+  onAuthStateChanged,
+  type User,
 } from "firebase/auth";
 import { auth } from "@/src/lib/firebase";
 
@@ -21,10 +22,20 @@ async function createSession(idToken: string) {
 }
 
 export function useAuth() {
-  const router = useRouter();
+  const [user,          setUser]          = useState<User | null>(null);
+  const [authLoading,   setAuthLoading]   = useState(true);   // true until Firebase resolves
   const [loading,       setLoading]       = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error,         setError]         = useState<string | null>(null);
+
+  // ── Sync user state with Firebase ──────────────────────────────────────────
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthLoading(false);
+    });
+    return () => unsub();
+  }, []);
 
   // ── Email / password login ─────────────────────────────────────────────────
   async function login(email: string, password: string, returnUrl = "/") {
@@ -33,10 +44,9 @@ export function useAuth() {
     try {
       const cred    = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await cred.user.getIdToken();
-      console.log(returnUrl)
+      console.log(returnUrl);
       await createSession(idToken);
       window.location.href = returnUrl;
-
     } catch (err: any) {
       setError(friendlyError(err.code));
     } finally {
@@ -58,7 +68,6 @@ export function useAuth() {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(cred.user, { displayName: name });
 
-      // Store nationality in Firestore via API
       const idToken = await cred.user.getIdToken();
       await createSession(idToken);
 
@@ -95,21 +104,31 @@ export function useAuth() {
     }
   }
 
-  return { login, signup, signInWithGoogle, loading, googleLoading, error, setError };
+  return {
+    user,
+    authLoading,
+    login,
+    signup,
+    signInWithGoogle,
+    loading,
+    googleLoading,
+    error,
+    setError,
+  };
 }
 
 // ── Friendly error messages ───────────────────────────────────────────────────
 function friendlyError(code: string): string {
   const map: Record<string, string> = {
-    "auth/invalid-credential":       "Incorrect email or password.",
-    "auth/user-not-found":           "No account found with this email.",
-    "auth/wrong-password":           "Incorrect password.",
-    "auth/email-already-in-use":     "An account with this email already exists.",
-    "auth/weak-password":            "Password must be at least 6 characters.",
-    "auth/invalid-email":            "Please enter a valid email address.",
-    "auth/too-many-requests":        "Too many attempts. Please try again later.",
-    "auth/network-request-failed":   "Network error. Check your connection.",
-    "auth/popup-blocked":            "Popup was blocked. Allow popups and try again.",
+    "auth/invalid-credential":     "Incorrect email or password.",
+    "auth/user-not-found":         "No account found with this email.",
+    "auth/wrong-password":         "Incorrect password.",
+    "auth/email-already-in-use":   "An account with this email already exists.",
+    "auth/weak-password":          "Password must be at least 6 characters.",
+    "auth/invalid-email":          "Please enter a valid email address.",
+    "auth/too-many-requests":      "Too many attempts. Please try again later.",
+    "auth/network-request-failed": "Network error. Check your connection.",
+    "auth/popup-blocked":          "Popup was blocked. Allow popups and try again.",
   };
   return map[code] ?? "Something went wrong. Please try again.";
 }

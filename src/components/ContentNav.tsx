@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { auth } from "@/src/lib/firebase";
 import { signOut, onAuthStateChanged, User } from "firebase/auth";
+import { useNotifications } from "@/src/hooks/useNotifications";
+import { NotificationBell } from "@/src/components/notifications/NotificationBell";
 
 type NavLink = { label: string; href: string };
 
@@ -13,8 +15,8 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         label: "Destinations", color: "#0A6A94",
         links: [
             { label: "Tours",      href: "/tours"      },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
+            { label: "Routes",     href: "/routes"     },
+            { label: "Events",     href: "/events"     },
             { label: "Community",  href: "/community"  },
         ],
     },
@@ -22,28 +24,28 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         label: "Events", color: "#94230a",
         links: [
             { label: "Destinations", href: "/destinations" },
-            { label: "Tours",      href: "/tours"      },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
-            { label: "Community",  href: "/community"  },
+            { label: "Tours",        href: "/tours"        },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
+            { label: "Community",    href: "/community"    },
         ],
     },
     "/tours": {
         label: "Tours", color: "#065F46",
         links: [
             { label: "Destinations", href: "/destinations" },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
-            { label: "Community",    href: "/community"     },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
+            { label: "Community",    href: "/community"    },
         ],
     },
     "/routes": {
         label: "Routes", color: "#c87c1b",
         links: [
             { label: "Destinations", href: "/destinations" },
-            { label: "Tours",      href: "/tours"      },
-            { label: "Events",      href: "/events"      },
-            { label: "Community",    href: "/community"     },
+            { label: "Tours",        href: "/tours"        },
+            { label: "Events",       href: "/events"       },
+            { label: "Community",    href: "/community"    },
         ],
     },
     "/saved": {
@@ -51,10 +53,9 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
-            { label: "Community",    href: "/community"     },
-
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
+            { label: "Community",    href: "/community"    },
         ],
     },
     "/bookings": {
@@ -62,9 +63,9 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
-            { label: "Community",    href: "/community"     },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
+            { label: "Community",    href: "/community"    },
         ],
     },
     "/settings": {
@@ -72,9 +73,9 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
-            { label: "Community",    href: "/community"     },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
+            { label: "Community",    href: "/community"    },
         ],
     },
     "/profile": {
@@ -82,19 +83,18 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
-            { label: "Community",    href: "/community"     },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
+            { label: "Community",    href: "/community"    },
         ],
     },
-
     "/community": {
         label: "Community", color: "#0a9436",
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
         ],
     },
     "/terms": {
@@ -102,9 +102,9 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
-            { label: "Community",    href: "/community"     },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
+            { label: "Community",    href: "/community"    },
         ],
     },
     "/cookies": {
@@ -112,19 +112,18 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
-            { label: "Community",    href: "/community"     },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
+            { label: "Community",    href: "/community"    },
         ],
     },
-
     "/privacy": {
         label: "Privacy", color: "#0a9436",
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
         ],
     },
     "/cancellation": {
@@ -132,8 +131,8 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
         ],
     },
     "/contact": {
@@ -141,8 +140,8 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
-            { label: "Routes",      href: "/routes"      },
-            { label: "Events",      href: "/events"      },
+            { label: "Routes",       href: "/routes"       },
+            { label: "Events",       href: "/events"       },
         ],
     },
 };
@@ -244,20 +243,24 @@ export default function ContentNav() {
     const [scrolled, setScrolled] = useState(false);
     const [dropOpen, setDropOpen] = useState(false);
 
-    // Derive everything from pathname — no extra state
     const { label, color, links } = getConfig(pathname ?? "/destinations");
     const name = user?.displayName ?? user?.email ?? "Traveler";
 
+    // ── Auth listener ─────────────────────────────────────────────────────────
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, u => { setUser(u); setLoading(false); });
         return () => unsub();
     }, []);
 
+    // ── Scroll shadow ─────────────────────────────────────────────────────────
     useEffect(() => {
         const fn = () => setScrolled(window.scrollY > 10);
         window.addEventListener("scroll", fn, { passive: true });
         return () => window.removeEventListener("scroll", fn);
     }, []);
+
+    // ── Notifications — only active when a user is signed in ──────────────────
+    const { notifications, markRead, markAllRead } = useNotifications(user?.uid ?? null);
 
     return (
         <nav style={{ position:"fixed", top:0, left:0, right:0, zIndex:100, height:64, background:scrolled?"rgba(255,255,255,0.97)":"rgba(255,255,255,0.92)", borderBottom:`1px solid ${scrolled?"rgba(14,133,178,0.12)":"rgba(14,133,178,0.07)"}`, boxShadow:scrolled?"0 2px 24px rgba(14,133,178,0.09)":"none", backdropFilter:"blur(16px)", transition:"all 0.25s ease", display:"flex", alignItems:"center" }}>
@@ -268,7 +271,7 @@ export default function ContentNav() {
                     Tizitaw <em style={{ fontStyle:"italic", color:"#1E9DC8" }}>Ethiopia</em>
                 </Link>
 
-                {/* Page label pill — derived from pathname */}
+                {/* Page label pill */}
                 <div style={{ display:"flex", alignItems:"center", gap:"0.4rem", background:`${color}15`, border:`1px solid ${color}30`, borderRadius:20, padding:"0.25rem 0.75rem", fontSize:"0.72rem", fontWeight:700, color, flexShrink:0 }}>
                     <span style={{ width:5, height:5, borderRadius:"50%", background:color, display:"inline-block" }}/>
                     {label}
@@ -276,7 +279,7 @@ export default function ContentNav() {
 
                 <div style={{ width:1, height:20, background:"rgba(14,133,178,0.15)", flexShrink:0 }}/>
 
-                {/* Nav links — derived from pathname */}
+                {/* Nav links */}
                 <div style={{ display:"flex", alignItems:"center", gap:"0.25rem", flex:1 }}>
                     {links.map(link => {
                         const active = pathname === link.href;
@@ -294,6 +297,16 @@ export default function ContentNav() {
 
                 {/* Right side */}
                 <div style={{ display:"flex", alignItems:"center", gap:"0.75rem", flexShrink:0 }}>
+
+                    {/* Notification bell — only shown when signed in */}
+                    {!loading && user && (
+                        <NotificationBell
+                            notifications={notifications}
+                            onMarkRead={markRead}
+                            onMarkAllRead={markAllRead}
+                        />
+                    )}
+
                     {loading ? (
                         <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(14,133,178,0.08)" }}/>
                     ) : user ? (
@@ -304,8 +317,8 @@ export default function ContentNav() {
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(14,133,178,0.15)"; (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
                                 <Avatar name={name} photoURL={user.photoURL}/>
                                 <span style={{ fontSize:"0.8rem", fontWeight:500, color:"#0A3D52", maxWidth:100, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                  {name.split(" ")[0]}
-                </span>
+                                    {name.split(" ")[0]}
+                                </span>
                                 <svg style={{ transform:dropOpen?"rotate(180deg)":"none", transition:"transform 0.2s", flexShrink:0 }} width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#1A6A8A" strokeWidth="1.8" strokeLinecap="round">
                                     <path d="M2 4l4 4 4-4"/>
                                 </svg>
