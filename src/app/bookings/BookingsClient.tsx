@@ -300,7 +300,7 @@ function BookingCard({ booking, tour, onSelect }: { booking: Booking; tour: Tour
                 {/* Body */}
                 <div style={{ padding:"1rem" }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"0.75rem" }}>
-                        <div style={{ display:"flex", items:"center", gap:"0.75rem" }}>
+                        <div style={{ display:"flex", gap:"0.75rem" }}>
                             <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
                                 <span style={{ fontSize:"0.62rem", fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color:"#1A6A8A" }}>Dates</span>
                                 <span style={{ fontSize:"0.8rem", fontWeight:600, color:"#0A3D52" }}>
