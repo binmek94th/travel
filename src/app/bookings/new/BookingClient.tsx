@@ -220,8 +220,6 @@ export default function BookingClient({ tour, user, deposit, remaining }: Props)
                     emergencyName:   data.emergencyName,
                     emergencyPhone:  data.emergencyPhone,
                     specialRequests: data.specialRequests,
-                    depositAmountUSD: depAmt,
-                    totalAmountUSD:   total,
                 }),
             });
 

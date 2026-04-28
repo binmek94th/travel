@@ -156,7 +156,7 @@ export default function VerifyEmailPage() {
                             The link may be expired or invalid.
                         </p>
                         <button
-                            onClick={() => router.push("/login")}
+                            onClick={() => router.push("/auth/login")}
                             className="w-full bg-blue-500 text-white py-3 rounded-lg"
                         >
                             Go to login

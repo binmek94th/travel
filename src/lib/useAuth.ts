@@ -33,9 +33,10 @@ export function useAuth() {
     try {
       const cred    = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await cred.user.getIdToken();
+      console.log(returnUrl)
       await createSession(idToken);
-      router.push(returnUrl);
-      router.refresh();
+      window.location.href = returnUrl;
+
     } catch (err: any) {
       setError(friendlyError(err.code));
     } finally {
@@ -67,8 +68,7 @@ export function useAuth() {
         body: JSON.stringify({ name, nationality }),
       });
 
-      router.push(returnUrl);
-      router.refresh();
+      window.location.href = returnUrl;
     } catch (err: any) {
       setError(friendlyError(err.code));
     } finally {
@@ -85,8 +85,7 @@ export function useAuth() {
       const cred     = await signInWithPopup(auth, provider);
       const idToken  = await cred.user.getIdToken();
       await createSession(idToken);
-      router.push(returnUrl);
-      router.refresh();
+      window.location.href = returnUrl;
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user") {
         setError(friendlyError(err.code));

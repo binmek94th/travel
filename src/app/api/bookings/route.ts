@@ -22,7 +22,6 @@ export async function POST(req: NextRequest) {
         const {
             tourId, startDate, travelers,
             emergencyName, emergencyPhone, specialRequests,
-            depositAmountUSD, totalAmountUSD,
         } = await req.json();
 
         // Validate required fields
@@ -65,6 +64,7 @@ export async function POST(req: NextRequest) {
             emergencyPhone,
             specialRequests: specialRequests ?? "",
             status:         "pending_payment",
+            confirmed: false,
             totalAmountUSD:   serverTotal,
             depositAmountUSD: serverDeposit,
             remainingAmountUSD: Math.round((serverTotal - serverDeposit) * 100) / 100,

@@ -18,13 +18,17 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+    req: NextRequest,
+    context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
   if (!await verifyAdminSession(req)) return NextResponse.json({ error:"Unauthorized" }, { status:401 });
   // Delete the post and all its answers
   const batch = adminDb.batch();
-  batch.delete(adminDb.collection("qa_posts").doc(params.id));
+  batch.delete(adminDb.collection("qa_posts").doc(id));
   const answers = await adminDb
-      .collection("qa_posts").doc(params.id)
+      .collection("qa_posts").doc(id)
       .collection("answers").get();
   answers.docs.forEach(d => batch.delete(d.ref));
   await batch.commit();
