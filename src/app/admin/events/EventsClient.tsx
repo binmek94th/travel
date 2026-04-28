@@ -22,6 +22,9 @@ const schema = z.object({
   startDate:     z.string().min(1, "Start date is required"),
   endDate:       z.string().min(1, "End date is required"),
   description:   z.string().min(10, "Description must be at least 10 characters"),
+  location:      z.string().optional(),
+  capacity:      z.coerce.number().min(0).optional().nullable(),
+  images:        z.array(z.string().url("Must be a valid URL")).optional(),
   isBookable:    z.boolean(),
   linkedTourId:  z.string().nullable(),
 }).refine(d => d.endDate >= d.startDate, {
@@ -36,8 +39,8 @@ type Event = {
   id: string; name: string; type: string; destinationId: string;
   startDate: string; endDate: string; isBookable: boolean;
   linkedTourId: string | null; description: string;
+  location?: string; capacity?: number | null; images?: string[];
 };
-
 type Destination = { id: string; name: string };
 type Tour        = { id: string; title: string };
 
@@ -61,6 +64,10 @@ const TYPE_COLORS: Record<string, string> = {
   ceremony:  "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
+const TYPE_ICONS: Record<string, string> = {
+  religious: "⛪", festival: "🎉", food: "🍽", ceremony: "🎊",
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
@@ -78,40 +85,67 @@ function formatDate(iso: string) {
   });
 }
 
-type Props = {
-  events: Event[];
-  total: number;
-  destinations: Destination[];
-  tours: Tour[];
-};
+// ── Image URL list editor ─────────────────────────────────────────────────────
+function ImageUrlEditor({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [draft, setDraft] = useState("");
+
+  function add() {
+    const url = draft.trim();
+    if (!url) return;
+    try { new URL(url); } catch { toast.error("Please enter a valid URL"); return; }
+    onChange([...value, url]);
+    setDraft("");
+  }
+
+  return (
+      <div className="flex flex-col gap-2">
+        {value.map((url, i) => (
+            <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <img src={url} alt="" className="h-10 w-14 rounded object-cover flex-shrink-0 bg-slate-200"/>
+              <span className="text-xs text-slate-500 truncate flex-1">{url}</span>
+              <button type="button" onClick={() => onChange(value.filter((_, j) => j !== i))}
+                      className="text-red-400 hover:text-red-600 flex-shrink-0 transition-colors">
+                <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M3 4h10M5 4v9h6V4M6 4V3h4v1"/>
+                </svg>
+              </button>
+            </div>
+        ))}
+        <div className="flex gap-2">
+          <input
+              type="url" value={draft} onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+              placeholder="https://example.com/image.jpg"
+              className={`${inputCls} flex-1 text-sm`}
+          />
+          <Btn variant="ghost" size="sm" onClick={add}>Add</Btn>
+        </div>
+      </div>
+  );
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function EventsClient({
-                                       events, total, destinations, tours,
-                                     }: Props) {
+export default function EventsClient({ events, total, destinations, tours }: {
+  events: Event[]; total: number; destinations: Destination[]; tours: Tour[];
+}) {
   const router = useRouter();
-
-  // filter + pagination
   const [typeFilter,   setTypeFilter]   = useState("all");
   const [page,         setPage]         = useState(1);
-
-  // modal + delete
   const [modal,        setModal]        = useState(false);
   const [editing,      setEditing]      = useState<Event | null>(null);
   const [saving,       setSaving]       = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Event | null>(null);
 
-
-
   const tourOptions: DropdownOption[] = useMemo(() => [
     { label: "No linked tour", value: "" },
-    ...(tours ?? []).map(t => ({
-      label: t.title,
-      value: t.id,
-    })),
+    ...(tours ?? []).map(t => ({ label: t.title, value: t.id })),
   ], [tours]);
 
-  // ── Filtering ──────────────────────────────────────────────────────────────
+  const destinationOptions: DropdownOption[] = useMemo(() =>
+          destinations?.map(d => ({ label: d.name, value: d.id })),
+      [destinations],
+  );
+
   const filtered = useMemo(() =>
           events?.filter(e => typeFilter === "all" || e.type === typeFilter),
       [events, typeFilter],
@@ -119,20 +153,16 @@ export default function EventsClient({
 
   const bookableCount = events?.filter(e => e.isBookable).length;
 
-  // ── RHF ───────────────────────────────────────────────────────────────────
   const {
-    register,
-    handleSubmit,
-    control,
-    reset,
-    watch,
+    register, handleSubmit, control, reset, watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: "", type: "", destinationId: "",
-      startDate: "", endDate: "",
-      description: "", isBookable: false, linkedTourId: null,
+      startDate: "", endDate: "", description: "",
+      location: "", capacity: null, images: [],
+      isBookable: false, linkedTourId: null,
     },
   });
 
@@ -142,40 +172,19 @@ export default function EventsClient({
     return (
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center max-w-sm">
-            <h2 className="text-lg font-semibold text-slate-800">
-              No destinations found
-            </h2>
-
-            <p className="text-sm text-slate-500 mt-2">
-              Create a destination first before adding events.
-            </p>
-
+            <h2 className="text-lg font-semibold text-slate-800">No destinations found</h2>
+            <p className="text-sm text-slate-500 mt-2">Create a destination first before adding events.</p>
             <div className="mt-5">
-              <Btn
-                  variant="primary"
-                  onClick={() => router.push("/admin/destinations")}
-              >
-                Go to destinations
-              </Btn>
+              <Btn variant="primary" onClick={() => router.push("/admin/destinations")}>Go to destinations</Btn>
             </div>
           </div>
         </div>
     );
   }
 
-  const destinationOptions: DropdownOption[] = useMemo(() =>
-          destinations?.map(d => ({ label: d.name, value: d.id })),
-      [destinations],
-  );
-
-  // ── Modal helpers ──────────────────────────────────────────────────────────
   function openNew() {
     setEditing(null);
-    reset({
-      name: "", type: "", destinationId: "",
-      startDate: "", endDate: "",
-      description: "", isBookable: false, linkedTourId: null,
-    });
+    reset({ name:"", type:"", destinationId:"", startDate:"", endDate:"", description:"", location:"", capacity:null, images:[], isBookable:false, linkedTourId:null });
     setModal(true);
   }
 
@@ -188,103 +197,62 @@ export default function EventsClient({
       startDate:     ev.startDate     ?? "",
       endDate:       ev.endDate       ?? "",
       description:   ev.description   ?? "",
+      location:      ev.location      ?? "",
+      capacity:      ev.capacity      ?? null,
+      images:        ev.images        ?? [],
       isBookable:    ev.isBookable     ?? false,
       linkedTourId:  ev.linkedTourId  ?? null,
     });
     setModal(true);
   }
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
   async function onSubmit(data: FormValues) {
-    // Convert empty string back to null for linkedTourId
-    const payload = {
-      ...data,
-      linkedTourId: data.linkedTourId || null,
-    };
-
+    const payload = { ...data, linkedTourId: data.linkedTourId || null };
     setSaving(true);
     try {
       const method = editing ? "PATCH" : "POST";
-      const url    = editing
-          ? `/api/admin/events/${editing.id}`
-          : "/api/admin/events";
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error ?? res.statusText ?? "Request failed");
-      }
-
+      const url    = editing ? `/api/admin/events/${editing.id}` : "/api/admin/events";
+      const res    = await fetch(url, { method, headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b?.error ?? res.statusText); }
       toast.success(editing ? "Event updated" : "Event created");
       setModal(false);
       router.refresh();
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to save event");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
   async function deleteEvent() {
     if (!deleteTarget) return;
-    const res = await fetch(`/api/admin/events/${deleteTarget.id}`, {
-      method: "DELETE",
-    });
+    const res = await fetch(`/api/admin/events/${deleteTarget.id}`, { method:"DELETE" });
     if (!res.ok) { toast.error("Failed to delete event"); return; }
     toast.success("Event deleted");
     router.refresh();
   }
 
-  // ── Toggle bookable inline ────────────────────────────────────────────────
   async function toggleBookable(id: string, val: boolean) {
-    const res = await fetch(`/api/admin/events/${id}`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ isBookable: val }),
-    });
+    const res = await fetch(`/api/admin/events/${id}`, { method:"PATCH", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ isBookable: val }) });
     if (!res.ok) { toast.error("Failed to update"); return; }
     router.refresh();
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
       <div className="flex flex-col gap-6">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h2
-                className="text-2xl font-light text-slate-800"
-                style={{ fontFamily: "'Playfair Display',serif" }}
-            >
-              Events
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              {total} events · {bookableCount} bookable
-            </p>
+            <h2 className="text-2xl font-light text-slate-800" style={{ fontFamily:"'Playfair Display',serif" }}>Events</h2>
+            <p className="text-sm text-slate-500 mt-1">{total} events · {bookableCount} bookable</p>
           </div>
           <Btn variant="primary" size="sm" onClick={openNew}>+ Add event</Btn>
         </div>
 
         <Card>
-          {/* Filter bar */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
-            <p className="text-sm font-medium text-slate-600 mr-1">
-              Festivals, ceremonies &amp; cultural experiences
-            </p>
+            <p className="text-sm font-medium text-slate-600 mr-1">Festivals, ceremonies &amp; cultural experiences</p>
             <div className="ml-auto">
-              <Dropdown
-                  options={TYPE_FILTER_OPTIONS}
-                  value={typeFilter}
-                  onChange={setTypeFilter}
-                  width="w-36"
-              />
+              <Dropdown options={TYPE_FILTER_OPTIONS} value={typeFilter} onChange={setTypeFilter} width="w-36"/>
             </div>
           </div>
 
@@ -292,28 +260,28 @@ export default function EventsClient({
             <thead>
             <tr>
               <Th>Event</Th><Th>Type</Th><Th>Destination</Th>
-              <Th>Date(s)</Th><Th>Bookable</Th><Th>Linked tour</Th>
+              <Th>Date(s)</Th><Th>Location</Th><Th>Capacity</Th>
+              <Th>Bookable</Th><Th>Linked tour</Th>
               <Th className="w-24">Actions</Th>
             </tr>
             </thead>
             <tbody>
             {filtered?.length === 0 ? (
-                <tr><td colSpan={7}>
-                  <EmptyState
-                      icon={<span className="text-2xl">🎉</span>}
-                      title="No events yet"
-                  />
-                </td></tr>
+                <tr><td colSpan={9}><EmptyState icon={<span className="text-2xl">🎉</span>} title="No events yet"/></td></tr>
             ) : filtered?.map(ev => {
-              const destName = destinations.find(d => d.id === ev.destinationId)?.name ?? ev.destinationId;
+              const destName  = destinations.find(d => d.id === ev.destinationId)?.name ?? ev.destinationId;
               const tourTitle = tours.find(t => t.id === ev.linkedTourId)?.title ?? null;
               return (
                   <tr key={ev.id} className="hover:bg-slate-50/60 group transition-colors">
                     <Td>
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-md bg-cyan-50 flex items-center justify-center text-base flex-shrink-0">
-                          🎉
-                        </div>
+                        {ev.images?.[0] ? (
+                            <img src={ev.images[0]} alt={ev.name} className="w-8 h-8 rounded-md object-cover flex-shrink-0"/>
+                        ) : (
+                            <div className="w-8 h-8 rounded-md bg-cyan-50 flex items-center justify-center text-base flex-shrink-0">
+                              {TYPE_ICONS[ev.type] ?? "🎉"}
+                            </div>
+                        )}
                         <div className="font-medium text-slate-800 text-sm">{ev.name}</div>
                       </div>
                     </Td>
@@ -329,29 +297,23 @@ export default function EventsClient({
                           <div className="text-xs text-slate-400">→ {formatDate(ev.endDate)}</div>
                       )}
                     </Td>
+                    <Td className="text-xs text-slate-500">{ev.location || <span className="text-slate-300">—</span>}</Td>
+                    <Td className="text-xs text-slate-600">{ev.capacity != null ? ev.capacity.toLocaleString() : <span className="text-slate-300">—</span>}</Td>
                     <Td>
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            className="rounded accent-cyan-600 w-4 h-4"
-                            checked={ev.isBookable}
-                            onChange={e => toggleBookable(ev.id, e.target.checked)}
-                        />
+                        <input type="checkbox" className="rounded accent-cyan-600 w-4 h-4" checked={ev.isBookable} onChange={e => toggleBookable(ev.id, e.target.checked)}/>
                         <span className="text-xs text-slate-500">{ev.isBookable ? "Yes" : "No"}</span>
                       </label>
                     </Td>
                     <Td className="text-xs">
-                      {tourTitle
-                          ? <span className="text-cyan-600 font-medium">{tourTitle}</span>
-                          : <span className="text-slate-300">—</span>
-                      }
+                      {tourTitle ? <span className="text-cyan-600 font-medium">{tourTitle}</span> : <span className="text-slate-300">—</span>}
                     </Td>
                     <Td>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Btn variant="ghost" size="sm" onClick={() => openEdit(ev)}>Edit</Btn>
                         <Btn variant="danger" size="sm" onClick={() => setDeleteTarget(ev)}>
                           <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                            <path d="M3 4h10M5 4v9h6V4M6 4V3h4v1" />
+                            <path d="M3 4h10M5 4v9h6V4M6 4V3h4v1"/>
                           </svg>
                         </Btn>
                       </div>
@@ -361,14 +323,12 @@ export default function EventsClient({
             })}
             </tbody>
           </Table>
-
-          <Pagination total={total} showing={filtered?.length} page={page} perPage={20} onPage={setPage} />
+          <Pagination total={total} showing={filtered?.length} page={page} perPage={20} onPage={setPage}/>
         </Card>
 
         {/* Modal */}
         <Modal
-            open={modal}
-            onClose={() => setModal(false)}
+            open={modal} onClose={() => setModal(false)}
             title={editing ? `Edit: ${editing.name}` : "Add event"}
             wide
             footer={
@@ -383,146 +343,86 @@ export default function EventsClient({
           <form onSubmit={e => e.preventDefault()} className="flex flex-col gap-4">
 
             <FormField label="Event name">
-              <input
-                  {...register("name")}
-                  className={`${inputCls} ${errorBorder(!!errors.name)}`}
-                  placeholder="e.g. Timkat Festival"
-              />
-              <FieldError msg={errors.name?.message} />
+              <input {...register("name")} className={`${inputCls} ${errorBorder(!!errors.name)}`} placeholder="e.g. Timkat Festival"/>
+              <FieldError msg={errors.name?.message}/>
             </FormField>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Type">
-                <Controller
-                    name="type"
-                    control={control}
-                    render={({ field }) => (
-                        <Dropdown
-                            options={TYPE_OPTIONS}
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Select type"
-                            width="w-full"
-                        />
-                    )}
-                />
-                <FieldError msg={errors.type?.message} />
+                <Controller name="type" control={control} render={({ field }) => (
+                    <Dropdown options={TYPE_OPTIONS} value={field.value} onChange={field.onChange} placeholder="Select type" width="w-full"/>
+                )}/>
+                <FieldError msg={errors.type?.message}/>
               </FormField>
-
               <FormField label="Destination">
-                <Controller
-                    name="destinationId"
-                    control={control}
-                    render={({ field }) => (
-                        <Dropdown
-                            searchable
-                            options={destinationOptions}
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Select destination"
-                            width="w-full"
-                        />
-                    )}
-                />
-                <FieldError msg={errors.destinationId?.message} />
+                <Controller name="destinationId" control={control} render={({ field }) => (
+                    <Dropdown searchable options={destinationOptions} value={field.value} onChange={field.onChange} placeholder="Select destination" width="w-full"/>
+                )}/>
+                <FieldError msg={errors.destinationId?.message}/>
               </FormField>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Start date">
-                <Controller
-                    name="startDate"
-                    control={control}
-                    render={({ field }) => (
-                        <DatePicker
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Start date"
-                            hasError={!!errors.startDate}
-                        />
-                    )}
-                />
-                <FieldError msg={errors.startDate?.message} />
+                <Controller name="startDate" control={control} render={({ field }) => (
+                    <DatePicker value={field.value} onChange={field.onChange} placeholder="Start date" hasError={!!errors.startDate}/>
+                )}/>
+                <FieldError msg={errors.startDate?.message}/>
               </FormField>
-
               <FormField label="End date">
-                <Controller
-                    name="endDate"
-                    control={control}
-                    render={({ field }) => (
-                        <DatePicker
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="End date"
-                            minDate={watch("startDate") || undefined}  
-                            hasError={!!errors.endDate}
-                        />
-                    )}
-                />
-                <FieldError msg={errors.endDate?.message} />
+                <Controller name="endDate" control={control} render={({ field }) => (
+                    <DatePicker value={field.value} onChange={field.onChange} placeholder="End date" minDate={watch("startDate") || undefined} hasError={!!errors.endDate}/>
+                )}/>
+                <FieldError msg={errors.endDate?.message}/>
+              </FormField>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Location" hint="Specific venue or area">
+                <input {...register("location")} className={inputCls} placeholder="e.g. Lalibela Town Square"/>
+              </FormField>
+              <FormField label="Capacity" hint="Leave blank if unlimited">
+                <input {...register("capacity")} type="number" min={0} className={`${inputCls} ${errorBorder(!!errors.capacity)}`} placeholder="e.g. 500"/>
+                <FieldError msg={errors.capacity?.message}/>
               </FormField>
             </div>
 
             <FormField label="Description">
-            <textarea
-                {...register("description")}
-                className={`${inputCls} min-h-[72px] resize-y ${errorBorder(!!errors.description)}`}
-                placeholder="Describe the event…"
-            />
-              <FieldError msg={errors.description?.message} />
+              <textarea {...register("description")} className={`${inputCls} min-h-[72px] resize-y ${errorBorder(!!errors.description)}`} placeholder="Describe the event…"/>
+              <FieldError msg={errors.description?.message}/>
             </FormField>
 
-            {/* Bookable toggle */}
-            <Controller
-                name="isBookable"
-                control={control}
-                render={({ field }) => (
-                    <label className="flex items-center gap-2.5 text-sm text-slate-600 cursor-pointer">
-                      <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded accent-cyan-600"
-                          checked={field.value}
-                          onChange={e => field.onChange(e.target.checked)}
-                      />
-                      Allow booking via linked tour
-                    </label>
-                )}
-            />
+            <FormField label="Images">
+              <Controller name="images" control={control} render={({ field }) => (
+                  <ImageUrlEditor value={field.value ?? []} onChange={field.onChange}/>
+              )}/>
+            </FormField>
 
-            {/* Linked tour — only shown when bookable */}
+            <Controller name="isBookable" control={control} render={({ field }) => (
+                <label className="flex items-center gap-2.5 text-sm text-slate-600 cursor-pointer">
+                  <input type="checkbox" className="w-4 h-4 rounded accent-cyan-600" checked={field.value} onChange={e => field.onChange(e.target.checked)}/>
+                  Allow booking via linked tour
+                </label>
+            )}/>
+
             {isBookable && (
                 <FormField label="Linked tour">
-                  <Controller
-                      name="linkedTourId"
-                      control={control}
-                      render={({ field }) => (
-                          <Dropdown
-                              searchable
-                              options={tourOptions}
-                              value={field.value ?? ""}
-                              onChange={v => field.onChange(v || null)}
-                              placeholder="Select a tour"
-                              width="w-full"
-                          />
-                      )}
-                  />
-                  <FieldError msg={errors.linkedTourId?.message} />
+                  <Controller name="linkedTourId" control={control} render={({ field }) => (
+                      <Dropdown searchable options={tourOptions} value={field.value ?? ""} onChange={v => field.onChange(v || null)} placeholder="Select a tour" width="w-full"/>
+                  )}/>
+                  <FieldError msg={errors.linkedTourId?.message}/>
                 </FormField>
             )}
 
           </form>
         </Modal>
 
-        {/* Delete dialog */}
         <DeleteDialog
-            open={!!deleteTarget}
-            onClose={() => setDeleteTarget(null)}
-            onConfirm={deleteEvent}
+            open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={deleteEvent}
             title={`Delete "${deleteTarget?.name}"?`}
             description="This will permanently remove the event."
             requireConfirmText={deleteTarget?.name}
         />
-
       </div>
   );
 }

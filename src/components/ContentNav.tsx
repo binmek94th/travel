@@ -14,7 +14,15 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Tours",      href: "/tours"      },
             { label: "Routes",      href: "/routes"      },
-            { label: "AI Planner", href: "/ai-planner" },
+            { label: "Community",  href: "/community"  },
+        ],
+    },
+    "/events": {
+        label: "Events", color: "#94230a",
+        links: [
+            { label: "Destinations", href: "/destinations" },
+            { label: "Tours",      href: "/tours"      },
+            { label: "Routes",      href: "/routes"      },
             { label: "Community",  href: "/community"  },
         ],
     },
@@ -23,7 +31,7 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Routes",      href: "/routes"      },
-            { label: "AI Planner",   href: "/ai-planner"   },
+            { label: "Events",      href: "/events"      },
             { label: "Community",    href: "/community"     },
         ],
     },
@@ -32,7 +40,7 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
         links: [
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",      href: "/tours"      },
-            { label: "AI Planner",   href: "/ai-planner"   },
+            { label: "Events",      href: "/events"      },
             { label: "Community",    href: "/community"     },
         ],
     },
@@ -42,7 +50,7 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
             { label: "Routes",      href: "/routes"      },
-            { label: "AI Planner",   href: "/ai-planner"   },
+            { label: "Events",      href: "/events"      },
             { label: "Community",    href: "/community"     },
 
         ],
@@ -53,7 +61,7 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
             { label: "Routes",      href: "/routes"      },
-            { label: "AI Planner",   href: "/ai-planner"   },
+            { label: "Events",      href: "/events"      },
             { label: "Community",    href: "/community"     },
         ],
     },
@@ -63,7 +71,7 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
             { label: "Routes",      href: "/routes"      },
-            { label: "AI Planner",   href: "/ai-planner"   },
+            { label: "Events",      href: "/events"      },
         ],
     },
 };
