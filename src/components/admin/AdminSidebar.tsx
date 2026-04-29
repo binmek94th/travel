@@ -53,9 +53,33 @@ const NAV: NavSection[] = [
     section: "System",
     items: [
       { href: "/admin/settings", label: "Settings", icon: IcoSettings },
+      { href: "/admin/analytics", label: "Analytics", icon: IcoAnalytics }
     ],
   },
 ];
+
+export function IcoAnalytics(p: SVGProps<SVGSVGElement>) {
+  return (
+      <svg
+          {...p}
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+      >
+        {/* Bars */}
+        <path d="M4 16V10" />
+        <path d="M8 16V6" />
+        <path d="M12 16V12" />
+        <path d="M16 16V8" />
+
+        {/* Trend line */}
+        <path d="M4 10l4-4 4 6 4-4" />
+      </svg>
+  );
+}
 
 export default function AdminSidebar() {
   const pathname = usePathname();

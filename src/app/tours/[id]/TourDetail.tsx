@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { auth } from "@/src/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import TourRouteMap from "./TourRouteMap";
+import {track} from "@/src/lib/analytics/track";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ItineraryDay = {
@@ -182,6 +183,12 @@ export default function TourDetail({
     const router = useRouter();
     const [activeImg, setActiveImg] = useState(0);
     const [activeDay, setActiveDay] = useState<number | null>(0);
+
+    useEffect(() => {
+        if (tour) {
+            track("tour_viewed", {tour_id: tour.id, tour_title: tour.title, tour_priceUSD: tour.priceUSD})
+        }
+     }, [tour.id]);
 
     const avgRating = reviews.length > 0
         ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;

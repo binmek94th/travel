@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import DatePicker from "@/src/components/ui/DatePicker";
+import {track} from "@/src/lib/analytics/track";
 
 type Tour = {
     id: string; title: string; durationDays: number;
@@ -199,6 +200,8 @@ export default function BookingClient({ tour, user, deposit, remaining }: Props)
     const depAmt    = Math.round(total * 0.2 * 100) / 100;
     const remAmt    = Math.round((total - depAmt) * 100) / 100;
 
+
+
     async function goToReview() {
         const ok = await trigger(["startDate", "travelers", "emergencyName", "emergencyPhone"]);
         if (!ok) { toast.error("Please fill in all required fields"); return; }
@@ -228,7 +231,11 @@ export default function BookingClient({ tour, user, deposit, remaining }: Props)
 
             // Redirect to Stripe checkout
             if (json.checkoutUrl) {
+                if (tour){
+                    track("payment_started", { id: tour.id, tour_usd: tour.priceUSD });
+                }
                 window.location.href = json.checkoutUrl;
+
             } else {
                 throw new Error("No checkout URL returned");
             }

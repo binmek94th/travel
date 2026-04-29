@@ -3,6 +3,7 @@
 
 import { useAuth } from "@/src/lib/useAuth";
 import { NotificationProvider } from "@/src/components/notifications/NotificationProvider";
+import {PageTracker} from "@/src/components/analytics/PageTracker";
 
 export function ClientProviders({ children }: { children: React.ReactNode }) {
     const { user, authLoading } = useAuth();
@@ -17,6 +18,7 @@ export function ClientProviders({ children }: { children: React.ReactNode }) {
 
     return (
         <NotificationProvider userId={user?.uid ?? null}>
+            <PageTracker />
             {children}
         </NotificationProvider>
     );

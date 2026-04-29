@@ -5,6 +5,7 @@ import {Toaster} from "sonner";
 import ConditionalNav from "@/src/components/ConditionalNav";
 import AIPlannerProvider from "@/src/components/AIPlannerProvider";
 import {ClientProviders} from "@/src/components/providers/ClientProviders";
+import {TrafficAnalytics} from "@/src/components/analytics/TrafficAnalytics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +33,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+    <head><TrafficAnalytics /><title></title></head>
       <body className="min-h-full flex flex-col">
       <ConditionalNav />
         <ClientProviders>
