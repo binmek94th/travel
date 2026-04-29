@@ -39,6 +39,25 @@ const SUGGESTIONS = [
     "Shorten to 5 days",
 ];
 
+// ── Strip tag helper (shared) ─────────────────────────────────────────────────
+
+function stripTags(s: string) {
+    return s.replace(/\[(dest|tour|route|event|guide):[a-zA-Z0-9]+\]/g, "");
+}
+
+// ── Cursor blink ──────────────────────────────────────────────────────────────
+
+function Cursor() {
+    return (
+        <span style={{
+            display: "inline-block", width: 2, height: 13,
+            background: "#1E9DC8", marginLeft: 2,
+            animation: "blink 1s step-end infinite",
+            verticalAlign: "text-bottom",
+        }}/>
+    );
+}
+
 // ── Underwater background ─────────────────────────────────────────────────────
 function UnderwaterBackground({ t }: { t: number }) {
     const W = 500;
@@ -121,30 +140,6 @@ function SugCard({ href, img, emoji, title, sub, color = "#1E9DC8" }: {
     );
 }
 
-// ── Typewriter + MarkdownRenderer ─────────────────────────────────────────────
-function TypewriterMarkdown({ content }: { content: string }) {
-    const [displayed, setDisplayed] = useState("");
-    const [done, setDone] = useState(false);
-    const idx = useRef(0);
-    useEffect(() => {
-        idx.current = 0; setDisplayed(""); setDone(false);
-        const iv = setInterval(() => {
-            const i = idx.current;
-            if (i >= content.length) { setDone(true); clearInterval(iv); return; }
-            const end = Math.min(i + 3, content.length);
-            setDisplayed(content.slice(0, end));
-            idx.current = end;
-        }, 12);
-        return () => clearInterval(iv);
-    }, [content]);
-    return (
-        <>
-            <MarkdownRenderer content={displayed}/>
-            {!done && <span style={{ display:"inline-block", width:2, height:13, background:"#1E9DC8", marginLeft:2, animation:"blink 1s step-end infinite", verticalAlign:"text-bottom" }}/>}
-        </>
-    );
-}
-
 // ── Message bubble ────────────────────────────────────────────────────────────
 function MessageBubble({ msg, destinations, tours, routes, events, guides }: {
     msg: Message; destinations: Destination[]; tours: Tour[];
@@ -177,7 +172,7 @@ function MessageBubble({ msg, destinations, tours, routes, events, guides }: {
                 }}>
                     {isUser
                         ? <p style={{ margin:0, fontSize:"0.83rem", color:"white", lineHeight:1.65 }}>{msg.content}</p>
-                        : <TypewriterMarkdown content={msg.content}/>
+                        : <MarkdownRenderer content={msg.content}/>
                     }
                 </div>
 
@@ -273,7 +268,8 @@ export default function AIPlannerDialog({ open, onClose, destinations, tours, ro
 
     const sendToAI = useCallback(async (userText: string) => {
         if (!userText.trim() || streaming) return;
-        setStreaming(true); setStreamingContent("");
+        setStreaming(true);
+        setStreamingContent(""); // clear any previous streaming content
         const userMsg: Message = { role:"user", content:userText.trim(), timestamp:Date.now() };
         setMessages(prev => [...prev, userMsg]);
         conversationRef.current = [...conversationRef.current, { role:"user", content:userText.trim() }];
@@ -300,26 +296,41 @@ export default function AIPlannerDialog({ open, onClose, destinations, tours, ro
                     if (!line.startsWith("data: ")) continue;
                     const data = line.slice(6).trim();
                     if (data === "[DONE]") break;
-                    try { const p = JSON.parse(data); if (p.text) { full += p.text; setStreamingContent(full); } } catch {}
+                    try {
+                        const p = JSON.parse(data);
+                        if (p.text) {
+                            full += p.text;
+                            // Update streaming content in real-time — the stream IS the typewriter
+                            setStreamingContent(full);
+                        }
+                    } catch {}
                 }
             }
+            // Stream complete — extract tag IDs and push final message
             const strip   = (s: string, tag: string) => [...s.matchAll(new RegExp(`\\[${tag}:([a-zA-Z0-9]+)\\]`, "g"))].map(m => m[1]);
             const destIds  = strip(full, "dest");
             const tourIds  = strip(full, "tour");
             const routeIds = strip(full, "route");
             const eventIds = strip(full, "event");
             const guideIds = strip(full, "guide");
-            const clean    = full.replace(/\[(dest|tour|route|event|guide):[a-zA-Z0-9]+\]/g, "").trim();
+            const clean    = stripTags(full).trim();
             conversationRef.current = [...conversationRef.current, { role:"assistant", content:clean }];
-            setMessages(prev => [...prev, { role:"assistant", content:clean, suggestedDestIds:destIds, suggestedTourIds:tourIds, suggestedRouteIds:routeIds, suggestedEventIds:eventIds, suggestedGuideIds:guideIds, timestamp:Date.now() }]);
+            setMessages(prev => [...prev, {
+                role: "assistant", content: clean,
+                suggestedDestIds: destIds, suggestedTourIds: tourIds,
+                suggestedRouteIds: routeIds, suggestedEventIds: eventIds,
+                suggestedGuideIds: guideIds, timestamp: Date.now(),
+            }]);
         } catch {
             setMessages(prev => [...prev, { role:"assistant", content:"Sorry, something went wrong. Please try again.", timestamp:Date.now() }]);
-        } finally { setStreaming(false); setStreamingContent(""); }
+        } finally {
+            setStreaming(false);
+            setStreamingContent("");
+        }
     }, [streaming, destinations, tours, routes, events, guides]);
 
     const send  = () => { if (!input.trim() || streaming) return; sendToAI(input.trim()); setInput(""); };
     const reset = () => { setMessages([]); setStreamingContent(""); setInput(""); conversationRef.current = []; };
-    const strip = (s: string) => s.replace(/\[(dest|tour|route|event|guide):[a-zA-Z0-9]+\]/g, "");
 
     if (!open) return null;
 
@@ -415,6 +426,7 @@ export default function AIPlannerDialog({ open, onClose, destinations, tours, ro
                         </div>
                     ))}
 
+                    {/* ── Live streaming bubble ─────────────────────────────────────────── */}
                     {streaming && (
                         <div style={{ display:"flex", gap:8, alignItems:"flex-start", animation:"chip-in 0.3s ease both" }}>
                             <div style={{ width:28, height:28, borderRadius:"50%", background:"linear-gradient(135deg,#28B8E8,#0A6A94)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:2, boxShadow:"0 2px 8px rgba(14,133,178,0.35)" }}>
@@ -424,11 +436,15 @@ export default function AIPlannerDialog({ open, onClose, destinations, tours, ro
                             </div>
                             <div style={{ flex:1, maxWidth:"84%" }}>
                                 {streamingContent ? (
+                                    // Render partial markdown as it arrives — cursor appended inline
                                     <div style={{ background:"rgba(255,255,255,0.90)", borderRadius:"4px 16px 16px 16px", padding:"10px 14px", border:"1px solid rgba(14,133,178,0.14)", backdropFilter:"blur(12px)", wordBreak:"break-word", boxShadow:"0 2px 10px rgba(14,133,178,0.10)" }}>
-                                        <MarkdownRenderer content={strip(streamingContent)}/>
-                                        <span style={{ display:"inline-block", width:2, height:13, background:"#1E9DC8", marginLeft:2, animation:"blink 1s step-end infinite", verticalAlign:"text-bottom" }}/>
+                                        <MarkdownRenderer content={stripTags(streamingContent)}/>
+                                        <Cursor/>
                                     </div>
-                                ) : <TypingIndicator/>}
+                                ) : (
+                                    // Nothing arrived yet — show dot bounce
+                                    <TypingIndicator/>
+                                )}
                             </div>
                         </div>
                     )}
@@ -454,12 +470,12 @@ export default function AIPlannerDialog({ open, onClose, destinations, tours, ro
                     <div style={{ display:"flex", gap:8, alignItems:"flex-end", background:"rgba(255,255,255,0.08)", borderRadius:14, border:"1.5px solid rgba(40,184,232,0.25)", padding:"7px 8px 7px 12px", transition:"border-color 0.2s, box-shadow 0.2s" }}
                          onFocusCapture={e=>{(e.currentTarget as HTMLElement).style.borderColor="rgba(40,184,232,0.60)";(e.currentTarget as HTMLElement).style.boxShadow="0 0 0 3px rgba(40,184,232,0.12)";}}
                          onBlurCapture={e=>{(e.currentTarget as HTMLElement).style.borderColor="rgba(40,184,232,0.25)";(e.currentTarget as HTMLElement).style.boxShadow="none";}}>
-            <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                      placeholder="Tell me about your dream Ethiopia trip…"
-                      rows={1} disabled={streaming}
-                      style={{ flex:1, border:"none", background:"transparent", resize:"none", fontSize:"0.83rem", color:"rgba(235,248,255,0.92)", outline:"none", fontFamily:"inherit", lineHeight:1.5, maxHeight:100, overflowY:"auto" }}
-            />
+                        <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+                                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                                  placeholder="Tell me about your dream Ethiopia trip…"
+                                  rows={1} disabled={streaming}
+                                  style={{ flex:1, border:"none", background:"transparent", resize:"none", fontSize:"0.83rem", color:"rgba(235,248,255,0.92)", outline:"none", fontFamily:"inherit", lineHeight:1.5, maxHeight:100, overflowY:"auto" }}
+                        />
                         <button onClick={send} disabled={!input.trim() || streaming}
                                 style={{ width:32, height:32, borderRadius:10, border:"none", background: input.trim() && !streaming ? "linear-gradient(135deg,#28B8E8,#0A6A94)" : "rgba(40,184,232,0.15)", display:"flex", alignItems:"center", justifyContent:"center", cursor: input.trim() && !streaming ? "pointer" : "default", transition:"all 0.18s", flexShrink:0, boxShadow: input.trim() && !streaming ? "0 3px 12px rgba(14,133,178,0.40)" : "none" }}>
                             {streaming
