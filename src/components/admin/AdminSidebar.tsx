@@ -43,6 +43,7 @@ const NAV: NavSection[] = [
   {
     section: "Community",
     items: [
+      { href: "/admin/emails",   label: "Emails",    icon: IcoMail },
       { href: "/admin/users",   label: "Users",    icon: IcoUsers },
       { href: "/admin/reviews", label: "Reviews",  icon: IcoStar2 },
       { href: "/admin/qa",      label: "Q&A Posts",icon: IcoChat },
@@ -163,6 +164,26 @@ function IcoStar(p: SVGProps<SVGSVGElement>) {
 function IcoStar2(p: SVGProps<SVGSVGElement>) {
   return <svg {...p} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M10 2l2.39 4.84 5.34.78-3.87 3.77.91 5.32L10 14.27l-4.77 2.51.91-5.32L2.27 7.62l5.34-.78L10 2z"/></svg>;
 }
+
+export function IcoMail(p: SVGProps<SVGSVGElement>) {
+  return (
+      <svg
+          {...p}
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+      >
+        {/* Envelope body */}
+        <rect x="2.5" y="4" width="15" height="12" rx="2" />
+
+        <path d="M3 5l7 6 7-6" />
+      </svg>
+  );
+}
+
 function IcoUsers(p: SVGProps<SVGSVGElement>) {
   return <svg {...p} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="8" cy="6" r="3"/><path d="M2 18c0-3.31 2.69-6 6-6s6 2.69 6 6"/><path d="M15 3c1.66 0 3 1.34 3 3s-1.34 3-3 3"/><path d="M18 18c0-2.21-1.34-4.1-3.25-4.75"/></svg>;
 }

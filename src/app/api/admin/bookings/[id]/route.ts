@@ -6,14 +6,46 @@ import { verifyAdminSession } from "@/src/lib/admin-auth";
 import { FieldValue } from "firebase-admin/firestore";
 
 
-// TODO: update this
 async function sendConfirmationEmail(opts: {
-  to: string; travelerName: string; tourTitle: string;
-  startDate: string; totalAmountUSD: number; note?: string;
+    to:             string;
+    travelerName:   string;
+    tourTitle:      string;
+    startDate:      string;
+    totalAmountUSD: number;
+    note?:          string;
+    // These extra fields come from the booking doc — pass them through from the
+    // caller so the email template has a complete picture
+    endDate?:          string;
+    travelers?:        number;
+    depositAmountUSD?: number;
+    bookingId?:        string;
+    tourImageUrl?:     string;
 }) {
-  // await resend.emails.send({ ... });
-  console.log("[notify:email]", opts);
+    const { sendBookingConfirmation } = await import("@/src/lib/email/resend");
+
+    const result = await sendBookingConfirmation({
+        to:               opts.to,
+        travelerName:     opts.travelerName,
+        tourTitle:        opts.tourTitle,
+        startDate:        opts.startDate,
+        endDate:          opts.endDate          ?? opts.startDate,
+        travelers:        opts.travelers        ?? 1,
+        totalAmountUSD:   opts.totalAmountUSD,
+        depositAmountUSD: opts.depositAmountUSD ?? Math.round(opts.totalAmountUSD * 0.2),
+        bookingId:        opts.bookingId        ?? "",
+        tourImageUrl:     opts.tourImageUrl,
+        adminNote:        opts.note,
+    });
+
+    if (!result.success) {
+        console.error("[notify:email] failed to send confirmation:", result.error);
+    } else {
+        console.log("[notify:email] confirmation sent, id:", result.id);
+    }
+
+    return result;
 }
+
 
 async function sendConfirmationSMS(opts: {
   to: string; travelerName: string; tourTitle: string; startDate: string;
@@ -109,68 +141,94 @@ export async function PATCH(
   });
 
   // ── On confirmation ───────────────────────────────────────────────────────
-  if (status === "confirmed") {
-    const travelerId = booking.userId ?? booking.travelerId ?? "";
+    if (status === "confirmed") {
+        const travelerId = booking.userId ?? booking.travelerId ?? "";
 
-    const [travelerSnap, tourSnap] = await Promise.all([
-      travelerId ? adminDb.collection("users").doc(travelerId).get() : Promise.resolve(null),
-      adminDb.collection("tours").doc(booking.tourId).get(),
-    ]);
+        const [travelerSnap, tourSnap] = await Promise.all([
+            travelerId ? adminDb.collection("users").doc(travelerId).get() : Promise.resolve(null),
+            adminDb.collection("tours").doc(booking.tourId).get(),
+        ]);
 
-    const traveler       = travelerSnap?.data();
-    const travelerName   = traveler?.displayName ?? traveler?.name ?? "Traveler";
-    const tourTitle      = tourSnap.data()?.title ?? "your tour";
-    const startDate      = booking.startDate ?? "";
-    const totalAmountUSD = booking.totalAmountUSD ?? 0;
+        const traveler       = travelerSnap?.data();
+        const tour           = tourSnap.data();
+        const travelerName   = traveler?.displayName ?? traveler?.name ?? "Traveler";
+        const tourTitle      = tour?.title        ?? "your tour";
+        const startDate      = booking.startDate  ?? "";
+        const endDate        = booking.endDate    ?? startDate;
+        const travelers      = booking.travelers  ?? 1;
+        const totalAmountUSD = booking.totalAmountUSD  ?? 0;
+        const depositAmountUSD = booking.depositAmountUSD ?? Math.round(totalAmountUSD * 0.2);
+        const tourImageUrl   = tour?.images?.[0] ?? tour?.coverImage ?? undefined;
 
-    const jobs: Promise<unknown>[] = [];
+        const jobs: Promise<unknown>[] = [];
 
-    if (travelerId) {
-      jobs.push(
-          createTravelerNotification({
-            userId:    travelerId,
-            type:      "booking_confirmed",
-            title:     "Your booking is confirmed! ✦",
-            message:   adminNote
-                ? `Great news! Your booking for ${tourTitle} on ${startDate} has been confirmed. Note from our team: "${adminNote}"`
-                : `Great news! Your booking for ${tourTitle} on ${startDate} has been confirmed. We look forward to seeing you!`,
-            bookingId: id,
-            tourId:    booking.tourId,
-            tourTitle,
-            startDate,
-            adminNote,
-          })
-      );
+        // ── 1. Traveler in-app notification ─────────────────────────────────────
+        if (travelerId) {
+            jobs.push(
+                createTravelerNotification({
+                    userId:    travelerId,
+                    type:      "booking_confirmed",
+                    title:     "Your booking is confirmed! ✦",
+                    message:   adminNote
+                        ? `Great news! Your booking for ${tourTitle} on ${startDate} is confirmed. Note from our team: "${adminNote}"`
+                        : `Great news! Your booking for ${tourTitle} on ${startDate} is confirmed. We look forward to seeing you!`,
+                    bookingId: id,
+                    tourId:    booking.tourId,
+                    tourTitle,
+                    startDate,
+                    adminNote,
+                })
+            );
+        }
+
+        // ── 2. Admin topbar notification ─────────────────────────────────────────
+        jobs.push(
+            createAdminNotification({
+                type:      "booking_confirmed",
+                message:   `Booking confirmed: ${travelerName} → ${tourTitle} (${startDate})`,
+                bookingId: id,
+                userId:    travelerId,
+            })
+        );
+
+        if (notify?.email && traveler?.email) {
+            jobs.push(
+                sendConfirmationEmail({
+                    to:              traveler.email,
+                    travelerName,
+                    tourTitle,
+                    startDate,
+                    endDate,
+                    travelers,
+                    totalAmountUSD,
+                    depositAmountUSD,
+                    bookingId:       id,
+                    tourImageUrl,
+                    note:            adminNote,
+                })
+            );
+        }
+
+        // ── 4. SMS (stub — replace with your SMS provider) ───────────────────────
+        if (notify?.sms && traveler?.phone) {
+            jobs.push(
+                sendConfirmationSMS({
+                    to:           traveler.phone,
+                    travelerName,
+                    tourTitle,
+                    startDate,
+                })
+            );
+        }
+
+        const results = await Promise.allSettled(jobs);
+        results.forEach((r, i) => {
+            if (r.status === "rejected") console.error(`[notify] job ${i} failed:`, r.reason);
+        });
     }
 
-    jobs.push(
-        createAdminNotification({
-          type:      "booking_confirmed",
-          message:   `Booking confirmed: ${travelerName} → ${tourTitle} (${startDate})`,
-          bookingId: id,
-          userId:    travelerId,
-        })
-    );
 
-    if (notify?.email && traveler?.email) {
-      jobs.push(sendConfirmationEmail({
-        to: traveler.email, travelerName, tourTitle, startDate, totalAmountUSD, note: adminNote,
-      }));
-    }
-
-    if (notify?.sms && traveler?.phone) {
-      jobs.push(sendConfirmationSMS({
-        to: traveler.phone, travelerName, tourTitle, startDate,
-      }));
-    }
-
-    const results = await Promise.allSettled(jobs);
-    results.forEach((r, i) => {
-      if (r.status === "rejected") console.error(`[notify] job ${i} failed:`, r.reason);
-    });
-  }
-
-  // ── On cancellation ───────────────────────────────────────────────────────
+    // ── On cancellation ───────────────────────────────────────────────────────
   if (status === "cancelled") {
     const travelerId = booking.userId ?? booking.travelerId ?? "";
     const tourSnap   = await adminDb.collection("tours").doc(booking.tourId).get();
