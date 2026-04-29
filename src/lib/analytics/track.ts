@@ -1,11 +1,8 @@
 // src/lib/analytics/track.ts
-// ─── Client-side event tracker ────────────────────────────────────────────────
-// Usage:
-//   import { track } from "@/src/lib/analytics/track";
-//   track("tour_viewed", { tourId, tourTitle, priceUSD });
-//   track("booking_started", { tourId, travelers });
-
 "use client";
+
+import { useEffect, useRef } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 type EventName =
     | "page_view"
@@ -23,7 +20,7 @@ type EventName =
     | "cta_clicked"
     | "share_clicked"
     | "filter_used"
-    | string; // allow custom events
+    | string;
 
 type EventProperties = Record<string, string | number | boolean | null | undefined>;
 
@@ -33,6 +30,22 @@ declare global {
         plausible?: (event: string, opts?: { props: EventProperties }) => void;
     }
 }
+
+// ── Lightweight visitor ID ─────────────────────────────────────────────────────
+// Not a tracking cookie — just a session-scoped random ID so we can count
+// unique visitors per session without storing PII. Cleared when tab closes.
+
+function getVisitorId(): string {
+    const key = "_tz_vid";
+    let vid = sessionStorage.getItem(key);
+    if (!vid) {
+        vid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        sessionStorage.setItem(key, vid);
+    }
+    return vid;
+}
+
+// ── Core track function ────────────────────────────────────────────────────────
 
 export function track(event: EventName, props: EventProperties = {}) {
     // 1. Google Analytics 4
@@ -45,40 +58,42 @@ export function track(event: EventName, props: EventProperties = {}) {
         window.plausible(event, { props });
     }
 
-    // 3. Fire-and-forget to our own Firestore event log (product analytics)
-    //    We only log business-critical events, not every page view
+    // 3. Our own Firestore event log — now includes page_view
     const productEvents: EventName[] = [
+        "page_view",
         "tour_viewed", "booking_started", "booking_completed",
         "booking_cancelled", "payment_started", "payment_completed",
         "user_signed_up", "guide_viewed", "destination_viewed",
     ];
 
     if (productEvents.includes(event)) {
+        let visitorId = "";
+        try { visitorId = getVisitorId(); } catch { /* SSR guard */ }
+
         fetch("/api/analytics/event", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 event,
                 props,
-                url:       window.location.pathname,
-                referrer:  document.referrer || null,
-                userAgent: navigator.userAgent,
+                url:       typeof window !== "undefined" ? window.location.pathname : null,
+                referrer:  typeof document !== "undefined" ? (document.referrer || null) : null,
+                userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+                visitorId, // session-scoped, not stored as PII
                 timestamp: new Date().toISOString(),
             }),
-            // keepalive ensures the request completes even if the page unloads
             keepalive: true,
-        }).catch(() => {}); // silent — analytics must never break the app
+        }).catch(() => {});
     }
 }
 
-// ─── React hook for page-level tracking ───────────────────────────────────────
-
-import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+// ── Page tracking hook ─────────────────────────────────────────────────────────
 
 export function usePageTracking() {
     const pathname     = usePathname();
     const searchParams = useSearchParams();
+    // Track only the first view per pathname per session to avoid double-counting
+    const tracked = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         const url = pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
@@ -88,6 +103,12 @@ export function usePageTracking() {
             window.gtag("config", process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "", {
                 page_path: url,
             });
+        }
+
+        // Firestore page view — deduplicated per session per path
+        if (!tracked.current.has(pathname)) {
+            tracked.current.add(pathname);
+            track("page_view", { path: pathname });
         }
     }, [pathname, searchParams]);
 }
