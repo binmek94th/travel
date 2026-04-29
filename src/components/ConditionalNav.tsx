@@ -13,6 +13,7 @@ export default function ConditionalNav() {
         pathname?.startsWith("/bookings") ||
         pathname?.startsWith("/events") ||
         pathname?.startsWith("/routes") ||
+        pathname?.startsWith("/guides") ||
         pathname?.startsWith("/profile") ||
         pathname?.startsWith("/privacy") ||
         pathname?.startsWith("/cookies") ||
