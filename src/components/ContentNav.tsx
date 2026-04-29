@@ -26,7 +26,6 @@ const NAV_CONFIG: Record<string, { label: string; color: string; links: NavLink[
             { label: "Destinations", href: "/destinations" },
             { label: "Tours",        href: "/tours"        },
             { label: "Routes",       href: "/routes"       },
-            { label: "Events",       href: "/events"       },
             { label: "Community",    href: "/community"    },
         ],
     },

@@ -350,6 +350,8 @@ function HomeNav({ user, loading }: { user: User | null; loading: boolean }) {
                         {[
                           { label:"Destinations", href:"/destinations" },
                           { label:"Tours",        href:"/tours"        },
+                          { label:"Routes",        href:"/routes"        },
+                          { label:"Events",        href:"/events"        },
                           { label:"Saved",        href:"/saved"        },
                           { label:"My bookings",  href:"/bookings"     },
                           { label:"Community",    href:"/community"    },
