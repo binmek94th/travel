@@ -1,8 +1,3 @@
-// src/lib/admin-notifications.ts
-//
-// Call this from any API route or server action to push a real-time
-// notification into the topbar. The Firestore onSnapshot listener in
-// AdminTopbar picks it up instantly.
 
 import { adminDb } from "@/src/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";

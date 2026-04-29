@@ -5,6 +5,8 @@ import { useState, useEffect, useRef, CSSProperties } from "react";
 import { auth } from "@/src/lib/firebase";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import {NotificationBell} from "@/src/components/notifications/NotificationBell";
+import {useNotifications} from "@/src/hooks/useNotifications";
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 const DESTINATIONS = [
@@ -273,6 +275,8 @@ function HomeNav({ user, loading }: { user: User | null; loading: boolean }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
 
+  const { notifications, markRead, markAllRead } = useNotifications(user?.uid ?? null);
+
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", fn, { passive: true });
@@ -317,7 +321,13 @@ function HomeNav({ user, loading }: { user: User | null; loading: boolean }) {
                 <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(14,133,178,0.08)" }}/>
             ) : user ? (
                 /* LOGGED IN: show avatar with dropdown */
-                <div ref={dropRef} style={{ position:"relative" }}>
+                <div ref={dropRef} style={{ position:"relative", display: "flex", gap: 4 }}>
+                  <NotificationBell
+                      notifications={notifications}
+                      onMarkRead={markRead}
+                      onMarkAllRead={markAllRead}
+                      transparent={true}
+                  />
                   <button onClick={() => setDropOpen(v=>!v)}
                           style={{ display:"flex", alignItems:"center", gap:"0.5rem", background:"none", border:"1px solid rgba(14,133,178,0.20)", borderRadius:40, padding:"0.25rem 0.65rem 0.25rem 0.3rem", cursor:"pointer" }}>
                     <div style={{ width:32, height:32, borderRadius:"50%", overflow:"hidden", flexShrink:0 }}>

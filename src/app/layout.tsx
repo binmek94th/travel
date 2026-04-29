@@ -34,9 +34,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
       <ConditionalNav />
-      <ClientProviders>
-      {children}
-      </ClientProviders>
+        <ClientProviders>
+          {children}
+        </ClientProviders>
       <AIPlannerProvider />
       <Toaster position="bottom-right" />
       </body>

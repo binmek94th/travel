@@ -5,8 +5,8 @@ import { adminDb } from "@/src/lib/firebase-admin";
 import { verifyAdminSession } from "@/src/lib/admin-auth";
 import { FieldValue } from "firebase-admin/firestore";
 
-// ─── External notification stubs ─────────────────────────────────────────────
 
+// TODO: update this
 async function sendConfirmationEmail(opts: {
   to: string; travelerName: string; tourTitle: string;
   startDate: string; totalAmountUSD: number; note?: string;
@@ -54,8 +54,6 @@ async function createTravelerNotification(opts: {
     createdAt: FieldValue.serverTimestamp(),
   });
 }
-
-// ─── Valid transitions ────────────────────────────────────────────────────────
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pending_payment: ["confirmed", "cancelled"],

@@ -340,7 +340,7 @@ export default function BookingsClient({
 
                       <Td className="text-slate-400 text-xs whitespace-nowrap">{b.startDate}</Td>
                       <Td className="text-slate-400 text-xs whitespace-nowrap">{b.createdAt?.slice(0, 10)}</Td>
-                      <Td><Badge status={b.status} /></Td>
+                      <Td><Badge status={b.status === "pending_payment" ? "Pending Payment" : b.status} /></Td>
 
                       {/* Actions */}
                       <Td onClick={(e: any) => e.stopPropagation()}>

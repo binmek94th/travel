@@ -1,6 +1,6 @@
 import { adminDb } from "@/src/lib/firebase-admin";
 import { fetchCollection, fmtDate } from "@/src/lib/firestore-helpers";
-import { StatCard, Card, CardHeader, Badge } from "@/src/components/admin/ui";
+import {StatCard, Card, CardHeader, Badge, Td} from "@/src/components/admin/ui";
 import Link from "next/link";
 import { CollectionReference, Query } from "firebase-admin/firestore";
 
@@ -27,7 +27,7 @@ async function getDashboardData() {
     getCount(adminDb.collection("destinations")),
     getCount(adminDb.collection("tours").where("status", "==", "active")),
     getCount(adminDb.collection("bookings").where("status", "==", "confirmed")),
-    getCount(adminDb.collection("bookings").where("status", "==", "pending")),
+    getCount(adminDb.collection("bookings").where("status", "==", "pending_payment")),
     fetchCollection("bookings", { orderBy: ["createdAt", "desc"], limit: 8 }),
     getCount(adminDb.collection("operators").where("isVerified", "==", false)),
     getCount(adminDb.collection("reviews").where("isFlagged", "==", true)),
@@ -151,7 +151,7 @@ export default async function DashboardPage() {
                               )}
                             </td>
                             <td className="px-4 py-3 border-b border-slate-50">
-                              <Badge status={b.status ?? "pending"} />
+                              <Td><Badge status={b.status === "pending_payment" ? "Pending Payment" : b.status} /></Td>
                             </td>
                             <td className="px-4 py-3 border-b border-slate-50 font-semibold text-slate-700">
                               {b.currency === "ETB" ? "ETB " : "$"}{b.totalAmountUSD ?? b.totalETB ?? "—"}
@@ -199,10 +199,10 @@ export default async function DashboardPage() {
               <CardHeader title="Needs Attention" />
               <div className="p-4 flex flex-col gap-2">
                 {[
-                  { href:"/admin/operators", label:"Operator applications", count: data.pendingOperators },
-                  { href:"/admin/reviews",   label:"Flagged reviews",       count: data.flaggedReviews   },
-                  { href:"/admin/tours",     label:"Tour approvals",        count: data.pendingTours     },
                   { href:"/admin/bookings",  label:"Pending bookings",      count: data.pendingBookings  },
+                  { href:"/admin/reviews",   label:"Flagged reviews",       count: data.flaggedReviews   },
+                  { href:"/admin/operators", label:"Operator applications", count: data.pendingOperators },
+                  { href:"/admin/tours",     label:"Tour approvals",        count: data.pendingTours     },
                 ].map(item => (
                     <Link
                         key={item.href}

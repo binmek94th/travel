@@ -3,7 +3,7 @@ import { adminAuth } from "@/src/lib/firebase-admin";
 import {cookies} from "next/headers";
 
 export async function verifyAdminSession(req: NextRequest) {
-  const cookie = req.cookies.get("__session")?.value;
+  const cookie = req.cookies.get("session")?.value;
   if (!cookie) return null;
   try {
     const decoded = await adminAuth.verifySessionCookie(cookie, true);
