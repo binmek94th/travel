@@ -77,12 +77,11 @@ export async function POST(req: NextRequest) {
 
         await bookingRef.set(bookingData);
 
-        // Create Stripe Checkout Session
         const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
         await createAdminNotification({
             type:      "new_booking",
-            message:   `New booking: ${user.displayName} → ${tourId} on ${startDate}`,
+            message:   `New booking: ${user.displayName || user.name} → ${tour.title} on ${startDate}`,
             bookingId: bookingRef.id,
             userId:    uid,
         });

@@ -182,15 +182,25 @@ export default function ResumePaymentClient({
                             )}
 
                             {/* Categories */}
-                            {tour?.categories?.length > 0 && (
+                            {tour?.categories?.length ? (
                                 <div style={{ position: "absolute", top: 12, left: 12, display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
                                     {tour.categories.slice(0, 2).map((c: string) => (
-                                        <span key={c} style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 20, padding: "0.2rem 0.6rem", fontSize: "0.62rem", fontWeight: 700, color: "#fff", letterSpacing: "0.06em" }}>
-                      {c}
-                    </span>
+                                        <span key={c} style={{
+                                            background: "rgba(255,255,255,0.18)",
+                                            backdropFilter: "blur(8px)",
+                                            border: "1px solid rgba(255,255,255,0.3)",
+                                            borderRadius: 20,
+                                            padding: "0.2rem 0.6rem",
+                                            fontSize: "0.62rem",
+                                            fontWeight: 700,
+                                            color: "#fff",
+                                            letterSpacing: "0.06em"
+                                        }}>
+                {c}
+            </span>
                                     ))}
                                 </div>
-                            )}
+                            ) : null}
 
                             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "1rem 1.25rem" }}>
                                 <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: "1.15rem", fontWeight: 700, color: "#fff", lineHeight: 1.3 }}>
