@@ -266,10 +266,13 @@ export default function AIPlannerDialog({ open, onClose, destinations, tours, ro
         return () => { document.removeEventListener("keydown", fn); document.body.style.overflow = ""; };
     }, [open, onClose]);
 
+// Replace the sendToAI function inside AIPlannerDialog.tsx
+// (everything else in the file stays the same)
+
     const sendToAI = useCallback(async (userText: string) => {
         if (!userText.trim() || streaming) return;
         setStreaming(true);
-        setStreamingContent(""); // clear any previous streaming content
+        setStreamingContent("");
         const userMsg: Message = { role:"user", content:userText.trim(), timestamp:Date.now() };
         setMessages(prev => [...prev, userMsg]);
         conversationRef.current = [...conversationRef.current, { role:"user", content:userText.trim() }];
@@ -285,7 +288,32 @@ export default function AIPlannerDialog({ open, onClose, destinations, tours, ro
                     guides:       guides.map(g => ({ id:g.id, name:g.name, regions:g.regions, languages:g.languages, specialties:g.specialties, bio:g.bio })),
                 }),
             });
+
+            // ── Rate limit handling ─────────────────────────────────────────────
+            if (res.status === 429) {
+                const body = await res.json().catch(() => ({}));
+                const resetInMs  = body.resetInMs ?? 60 * 60 * 1000;
+                const resetMins  = Math.ceil(resetInMs / 60000);
+                const isAuthed   = body.isAuthed ?? false;
+
+                // Remove the user message we just added (so they can try again later)
+                setMessages(prev => prev.slice(0, -1));
+                conversationRef.current = conversationRef.current.slice(0, -1);
+
+                // Push a friendly assistant error bubble
+                setMessages(prev => [...prev, {
+                    role:      "assistant",
+                    content:   isAuthed
+                        ? `⏱ You've used all your AI requests for this hour. Your limit resets in **${resetMins} minute${resetMins !== 1 ? "s" : ""}** — come back then and I'll have plenty more suggestions ready! ✦`
+                        : `⏱ You've reached the free limit of ${body.remaining === 0 ? "5" : ""} AI requests per hour.\n\n**Sign in** to get 4× more requests, or try again in **${resetMins} minute${resetMins !== 1 ? "s" : ""}**.`,
+                    timestamp: Date.now(),
+                }]);
+                return;
+            }
+
             if (!res.ok || !res.body) throw new Error("Failed");
+
+            // ── Stream response ─────────────────────────────────────────────────
             const reader = res.body.getReader(), decoder = new TextDecoder();
             let full = "";
             while (true) {
@@ -298,37 +326,40 @@ export default function AIPlannerDialog({ open, onClose, destinations, tours, ro
                     if (data === "[DONE]") break;
                     try {
                         const p = JSON.parse(data);
-                        if (p.text) {
-                            full += p.text;
-                            // Update streaming content in real-time — the stream IS the typewriter
-                            setStreamingContent(full);
-                        }
+                        if (p.text) { full += p.text; setStreamingContent(full); }
                     } catch {}
                 }
             }
-            // Stream complete — extract tag IDs and push final message
-            const strip   = (s: string, tag: string) => [...s.matchAll(new RegExp(`\\[${tag}:([a-zA-Z0-9]+)\\]`, "g"))].map(m => m[1]);
-            const destIds  = strip(full, "dest");
-            const tourIds  = strip(full, "tour");
-            const routeIds = strip(full, "route");
-            const eventIds = strip(full, "event");
-            const guideIds = strip(full, "guide");
-            const clean    = stripTags(full).trim();
+
+            // ── Finalise ────────────────────────────────────────────────────────
+            const extract  = (s: string, tag: string) => [...s.matchAll(new RegExp(`\\[${tag}:([a-zA-Z0-9]+)\\]`, "g"))].map(m => m[1]);
+            const destIds  = extract(full, "dest");
+            const tourIds  = extract(full, "tour");
+            const routeIds = extract(full, "route");
+            const eventIds = extract(full, "event");
+            const guideIds = extract(full, "guide");
+            const clean    = full.replace(/\[(dest|tour|route|event|guide):[a-zA-Z0-9]+\]/g, "").trim();
+
             conversationRef.current = [...conversationRef.current, { role:"assistant", content:clean }];
             setMessages(prev => [...prev, {
-                role: "assistant", content: clean,
-                suggestedDestIds: destIds, suggestedTourIds: tourIds,
-                suggestedRouteIds: routeIds, suggestedEventIds: eventIds,
-                suggestedGuideIds: guideIds, timestamp: Date.now(),
+                role:"assistant", content:clean,
+                suggestedDestIds:destIds, suggestedTourIds:tourIds,
+                suggestedRouteIds:routeIds, suggestedEventIds:eventIds,
+                suggestedGuideIds:guideIds, timestamp:Date.now(),
             }]);
+
         } catch {
-            setMessages(prev => [...prev, { role:"assistant", content:"Sorry, something went wrong. Please try again.", timestamp:Date.now() }]);
+            setMessages(prev => [...prev, {
+                role:"assistant",
+                content:"Sorry, something went wrong. Please try again.",
+                timestamp:Date.now(),
+            }]);
         } finally {
             setStreaming(false);
             setStreamingContent("");
         }
     }, [streaming, destinations, tours, routes, events, guides]);
-
+    
     const send  = () => { if (!input.trim() || streaming) return; sendToAI(input.trim()); setInput(""); };
     const reset = () => { setMessages([]); setStreamingContent(""); setInput(""); conversationRef.current = []; };
 

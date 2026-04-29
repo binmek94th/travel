@@ -1,7 +1,95 @@
 // src/app/api/ai-planner/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { adminDb } from "@/src/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 export const maxDuration = 60;
+
+// ─── Rate limit config ────────────────────────────────────────────────────────
+// Anonymous users:    5 requests / hour
+// Signed-in users:   20 requests / hour
+// Sliding window — counts requests in the last 60 minutes
+
+const LIMITS = {
+    anonymous: { requests: 7,  windowMs: 60 * 60 * 1000 },
+    authed:    { requests: 20, windowMs: 60 * 60 * 1000 },
+};
+
+// ─── Rate limit check via Firestore ───────────────────────────────────────────
+// Each key gets a doc in `rateLimits/{key}` with an array of timestamps.
+// We prune old timestamps and check the count — pure sliding window, no Redis needed.
+
+async function checkRateLimit(key: string, isAuthed: boolean): Promise<{
+    allowed: boolean;
+    remaining: number;
+    resetInMs: number;
+}> {
+    const limit     = isAuthed ? LIMITS.authed : LIMITS.anonymous;
+    const now       = Date.now();
+    const windowStart = now - limit.windowMs;
+    const docRef    = adminDb.collection("rateLimits").doc(key);
+
+    try {
+        const result = await adminDb.runTransaction(async tx => {
+            const snap = await tx.get(docRef);
+            const data = snap.data();
+
+            // Filter out timestamps older than the window
+            const timestamps: number[] = (data?.timestamps ?? []).filter((t: number) => t > windowStart);
+
+            if (timestamps.length >= limit.requests) {
+                // Oldest timestamp in window — reset happens when it falls out
+                const oldest   = Math.min(...timestamps);
+                const resetInMs = (oldest + limit.windowMs) - now;
+                return { allowed: false, remaining: 0, resetInMs: Math.max(0, resetInMs) };
+            }
+
+            // Allow — append current timestamp
+            timestamps.push(now);
+            tx.set(docRef, {
+                timestamps,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            return {
+                allowed:   true,
+                remaining: limit.requests - timestamps.length,
+                resetInMs: limit.windowMs,
+            };
+        });
+
+        return result;
+    } catch {
+        // If Firestore fails, allow the request rather than blocking users
+        return { allowed: true, remaining: 1, resetInMs: limit.windowMs };
+    }
+}
+
+// ─── Get rate limit key ───────────────────────────────────────────────────────
+// Keyed by userId for authenticated users, IP + user agent hash for anonymous.
+
+async function getRateLimitKey(req: NextRequest): Promise<{ key: string; isAuthed: boolean }> {
+    // Try session cookie first
+    try {
+        const { adminAuth } = await import("@/src/lib/firebase-admin");
+        const session = req.cookies.get("session")?.value;
+        if (session) {
+            const decoded = await adminAuth.verifySessionCookie(session, true);
+            return { key: `user_${decoded.uid}`, isAuthed: true };
+        }
+    } catch { /* not signed in */ }
+
+    // Anonymous — use IP
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        ?? req.headers.get("x-real-ip")
+        ?? "unknown";
+
+    // Sanitise IP for use as a Firestore doc ID
+    const safeIp = ip.replace(/[:/]/g, "_").slice(0, 64);
+    return { key: `anon_${safeIp}`, isAuthed: false };
+}
+
+// ─── System prompt ────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are an expert Ethiopia travel planner for Tizitaw Ethiopia — a curated travel platform.
 
@@ -46,13 +134,45 @@ ETHIOPIA EXPERTISE:
 
 Always be honest about challenges (distance, altitude, cost) while keeping the spirit adventurous and encouraging.`;
 
+// ─── POST handler ─────────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
+    // ── 1. Rate limit check ──────────────────────────────────────────────────
+    const { key, isAuthed } = await getRateLimitKey(req);
+    const { allowed, remaining, resetInMs } = await checkRateLimit(key, isAuthed);
+
+    if (!allowed) {
+        const resetInMins = Math.ceil(resetInMs / 60000);
+        return NextResponse.json(
+            {
+                error: isAuthed
+                    ? `You've reached the limit of ${LIMITS.authed.requests} AI requests per hour. Please try again in ${resetInMins} minute${resetInMins !== 1 ? "s" : ""}.`
+                    : `You've reached the limit of ${LIMITS.anonymous.requests} AI requests per hour. Sign in to get a higher limit, or try again in ${resetInMins} minute${resetInMins !== 1 ? "s" : ""}.`,
+                code:        "rate_limited",
+                resetInMs,
+                remaining:   0,
+                isAuthed,
+            },
+            {
+                status: 429,
+                headers: {
+                    "Retry-After":              String(Math.ceil(resetInMs / 1000)),
+                    "X-RateLimit-Limit":        String(isAuthed ? LIMITS.authed.requests : LIMITS.anonymous.requests),
+                    "X-RateLimit-Remaining":    "0",
+                    "X-RateLimit-Reset":        String(Math.floor((Date.now() + resetInMs) / 1000)),
+                },
+            }
+        );
+    }
+
+    // ── 2. Parse body ────────────────────────────────────────────────────────
     const { messages, destinations, tours, routes, events, guides } = await req.json();
 
     if (!messages?.length) {
         return NextResponse.json({ error: "messages required" }, { status: 400 });
     }
 
+    // ── 3. Build context ─────────────────────────────────────────────────────
     const destContext = (destinations ?? [])
         .map((d: any) => `- ${d.name} [dest:${d.id}] | Region: ${d.region} | Categories: ${d.categories?.join(", ")} | ${d.description}`)
         .join("\n");
@@ -62,21 +182,15 @@ export async function POST(req: NextRequest) {
         .join("\n");
 
     const routeContext = (routes ?? []).length
-        ? (routes as any[])
-            .map(r => `- ${r.name} [route:${r.id}] | ${r.totalDays} days | Stops: ${r.stops?.map((s: any) => s.destName ?? s.destinationId).join(" → ")} | ${r.description}`)
-            .join("\n")
+        ? (routes as any[]).map(r => `- ${r.name} [route:${r.id}] | ${r.totalDays} days | Stops: ${r.stops?.map((s: any) => s.destName ?? s.destinationId).join(" → ")} | ${r.description}`).join("\n")
         : "None listed";
 
     const eventContext = (events ?? []).length
-        ? (events as any[])
-            .map(e => `- ${e.name} [event:${e.id}] | Type: ${e.type} | Dates: ${e.startDate}→${e.endDate} | Location: ${e.location ?? e.destName ?? ""} | ${e.description}`)
-            .join("\n")
+        ? (events as any[]).map(e => `- ${e.name} [event:${e.id}] | Type: ${e.type} | Dates: ${e.startDate}→${e.endDate} | Location: ${e.location ?? e.destName ?? ""} | ${e.description}`).join("\n")
         : "None listed";
 
     const guideContext = (guides ?? []).length
-        ? (guides as any[])
-            .map(g => `- ${g.name} [guide:${g.id}] | Regions: ${g.regions?.join(", ")} | Languages: ${g.languages?.join(", ")} | Specialties: ${g.specialties?.join(", ")} | ${g.bio}`)
-            .join("\n")
+        ? (guides as any[]).map(g => `- ${g.name} [guide:${g.id}] | Regions: ${g.regions?.join(", ")} | Languages: ${g.languages?.join(", ")} | Specialties: ${g.specialties?.join(", ")} | ${g.bio}`).join("\n")
         : "None listed";
 
     const contextualSystem = `${SYSTEM_PROMPT}
@@ -98,6 +212,7 @@ ${guideContext}
 
 When recommending any of the above, use the appropriate ID tag so it renders as a clickable card.`;
 
+    // ── 4. Call Anthropic ────────────────────────────────────────────────────
     const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -119,6 +234,7 @@ When recommending any of the above, use the appropriate ID tag so it renders as 
         return NextResponse.json({ error: err }, { status: response.status });
     }
 
+    // ── 5. Stream back ───────────────────────────────────────────────────────
     const encoder = new TextEncoder();
     const stream  = new ReadableStream({
         async start(controller) {
@@ -144,11 +260,20 @@ When recommending any of the above, use the appropriate ID tag so it renders as 
                         } catch {}
                     }
                 }
-            } finally { controller.close(); reader.releaseLock(); }
+            } finally {
+                controller.close();
+                reader.releaseLock();
+            }
         },
     });
 
     return new NextResponse(stream, {
-        headers: { "Content-Type":"text/event-stream", "Cache-Control":"no-cache", "Connection":"keep-alive" },
+        headers: {
+            "Content-Type":           "text/event-stream",
+            "Cache-Control":          "no-cache",
+            "Connection":             "keep-alive",
+            "X-RateLimit-Limit":      String(isAuthed ? LIMITS.authed.requests : LIMITS.anonymous.requests),
+            "X-RateLimit-Remaining":  String(remaining),
+        },
     });
 }
